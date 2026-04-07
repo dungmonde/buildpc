@@ -6,8 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Motherboard extends Model
 {
-    public $timestamps = false;
+    protected $table = 'motherboards';        // ← thiếu cái này
     protected $primaryKey = 'component_id';
+    public $incrementing = false;             // ← thiếu cái này
+    public $timestamps = false;
+
     protected $fillable = [
         'component_id', 'socket', 'form_factor',
         'max_memory', 'memory_slots', 'color', 'ddr_gen'
@@ -18,7 +21,6 @@ class Motherboard extends Model
         return $this->belongsTo(Component::class, 'component_id');
     }
 
-    // Lọc RAM tương thích theo ddr_gen
     public function compatibleMemory()
     {
         return Memory::where('ddr_gen', $this->ddr_gen)->with('component');

@@ -1,26 +1,9 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
-
-class Cpu extends Model
-{
-    public $timestamps = false;
+class Cpu extends Model {
+    protected $table = 'cpus';
     protected $primaryKey = 'component_id';
-    protected $fillable = [
-        'component_id', 'core_count', 'core_clock', 'boost_clock',
-        'microarchitecture', 'tdp', 'graphics', 'socket'
-    ];
-
-    public function component()
-    {
-        return $this->belongsTo(Component::class, 'component_id');
-    }
-
-    // Lọc mainboard tương thích theo socket
-    public function compatibleMotherboards()
-    {
-        return Motherboard::where('socket', $this->socket)->with('component');
-    }
+    public $incrementing = false;
+    public $timestamps = false;
 }

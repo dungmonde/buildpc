@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Memory extends Model
 {
-    public $timestamps = false;
+    protected $table = 'memory';
     protected $primaryKey = 'component_id';
+    public $incrementing = false;             // ← thiếu cái này
+    public $timestamps = false;
+
     protected $fillable = [
-        'component_id', 'speed', 'module_count', 'module_size',
+        'component_id', 'speed', 'modules',
         'price_per_gb', 'color', 'first_word_latency', 'cas_latency',
         'capacity', 'ddr_gen'
     ];

@@ -1,16 +1,10 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
-
-class ComponentType extends Model
-{
+class ComponentType extends Model {
+    protected $table = 'component_types';
     public $timestamps = false;
-    protected $fillable = ['type_name'];
-
-    public function components()
-    {
+    public function components() {
         return $this->hasMany(Component::class, 'type_id');
     }
 }
