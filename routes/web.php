@@ -1,11 +1,23 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ForumController;
+use App\Http\Controllers\BuildController;
 use App\Models\Component;
 use Illuminate\Support\Facades\Route;
 
 // Trang chủ
 Route::get('/', fn() => view('pages.home'))->name('home');
+
+// Forum
+Route::get('/forum', [ForumController::class, 'index'])->name('forum.index');
+Route::get('/forum/post/{id}', [ForumController::class, 'show'])->name('forum.show');
+
+// Đảm bảo người dùng phải đăng nhập mới được đăng bài (sử dụng middleware auth)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/forum/create', [ForumController::class, 'create'])->name('forum.create');
+    Route::post('/forum/store', [ForumController::class, 'store'])->name('forum.store');
+});
 
 // PC Builder
 Route::get('/builder', fn() => view('pages.builder.manual'))->name('builder.manual');
