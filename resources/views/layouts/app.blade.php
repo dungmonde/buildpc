@@ -20,7 +20,7 @@
             <a href="{{ route('builder.manual') }}" class="hover:underline">Xây dựng</a>
             <a href="{{ route('builder.recommend') }}" class="hover:underline">Gợi ý cấu hình</a>
             <a href="{{ route('forum.index') }}" class="hover:underline">Diễn đàn</a>
-            <a href="#how-it-works" class="hover:underline">Hướng dẫn</a>
+            <a href="{{ route('guides.index') }}" class="hover:underline">Hướng dẫn</a>
         </div>
 
         {{-- Auth --}}

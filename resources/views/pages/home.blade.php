@@ -11,10 +11,10 @@
         {{-- Cột 1: Heading + CTA --}}
         <div>
             <h1 class="text-5xl font-black leading-tight uppercase">
-                Xây dựng cấu hình máy tính hoàn hảo của bạn!
+                Pick Parts. Build Your PC. Compare and Share.
             </h1>
             <p class="text-gray-500 mt-4 text-sm">
-                Chọn từ các cấu hình có sẵn hoặc tự tay lắp ráp PC theo ý muốn.
+                Chúng tôi cung cấp hướng dẫn về lựa chọn linh kiện, giá cả và khả năng tương thích cho những người tự lắp ráp máy tính.
             </p>
             <div class="flex gap-3 mt-8">
                 <a href="{{ route('builder.recommend') }}" 
@@ -23,7 +23,7 @@
                 </a>
                 <a href="{{ route('builder.manual') }}" 
                    class="border border-black px-6 py-3 text-sm font-semibold hover:bg-black hover:text-white transition">
-                    Tự xây dựng
+                    Tự build cấu hình
                 </a>
             </div>
         </div>
@@ -40,13 +40,13 @@
             <div>
                 <h3 class="font-bold text-lg">Gợi ý cấu hình</h3>
                 <p class="text-gray-500 text-sm mt-1">
-                    Không rành về linh kiện? Nhập nhu cầu và ngân sách, hệ thống sẽ tự gợi ý cấu hình phù hợp nhất.
+                    Bạn đang tự lắp ráp PC và cần ý tưởng để bắt đầu? Hãy tham khảo các hướng dẫn lắp ráp của chúng tôi, bao gồm các hệ thống phù hợp với nhiều mục đích sử dụng và ngân sách khác nhau.
                 </p>
             </div>
             <div>
                 <h3 class="font-bold text-lg">Tự xây dựng</h3>
                 <p class="text-gray-500 text-sm mt-1">
-                    Tự tay chọn từng linh kiện. Hệ thống kiểm tra tương thích và tính tổng chi phí realtime.
+                    Tự tay chọn từng linh kiện theo sở thích của bạn.
                 </p>
             </div>
         </div>

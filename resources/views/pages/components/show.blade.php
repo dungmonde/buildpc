@@ -1,0 +1,269 @@
+@extends('layouts.app')
+
+@section('title', $component->name)
+
+@section('content')
+<div class="max-w-7xl mx-auto px-8 py-10">
+
+    <div class="text-sm text-gray-500 mb-6 flex items-center gap-2">
+        <a href="{{ route('home') }}" class="hover:text-black transition">Trang chủ</a>
+        <span>/</span>
+        <a href="{{ route('components.index', $type) }}" class="hover:text-black transition uppercase">
+            {{ $type }}
+        </a>
+        <span>/</span>
+        <span class="text-black font-medium truncate">{{ $component->name }}</span>
+    </div>
+
+    <div class="border border-gray-300 bg-white">
+
+        <div class="border-b border-gray-300 px-6 py-4">
+            <h1 class="text-3xl font-black uppercase tracking-wide">
+                {{ $component->name }}
+            </h1>
+        </div>
+
+        <div class="grid grid-cols-12 gap-8 p-6">
+
+            <div class="col-span-12 lg:col-span-3">
+                <div class="border border-gray-300 bg-gray-50 p-6 flex items-center justify-center min-h-[260px]">
+                    <img
+                        src="{{ asset('images/components/' . $type . '/' . $component->id . '.jpg') }}"
+                        class="max-h-[220px] w-auto object-contain"
+                    >
+                </div>
+
+                @if($price)
+                    <div class="mt-4 border border-gray-300 p-4 text-center">
+                        <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                            Giá hiện tại
+                        </p>
+                        <p class="text-3xl font-black">
+                            {{ number_format($price, 0, ',', '.') }} ₫
+                        </p>
+                    </div>
+                @endif
+            </div>
+
+            <div class="col-span-12 lg:col-span-9">
+                <div class="border border-gray-300">
+
+                    <div class="px-5 py-4 border-b border-gray-300 bg-gray-50">
+                        <h2 class="text-lg font-bold uppercase tracking-wide">
+                            Thông số kỹ thuật
+                        </h2>
+                    </div>
+
+                    <div class="divide-y divide-gray-200 text-sm">
+
+                        @if($type === 'cpu' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Số nhân</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->core_count }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Xung cơ bản</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->core_clock }} GHz</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Xung boost</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->boost_clock }} GHz</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">TDP</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->tdp }} W</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Socket</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->socket }}</div>
+                            </div>
+
+                        @elseif($type === 'gpu' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Chipset</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->chipset }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">VRAM</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->memory }} GB</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Core Clock</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->core_clock }} MHz</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Boost Clock</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->boost_clock }} MHz</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Chiều dài</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->length }} mm</div>
+                            </div>
+
+                        @elseif($type === 'ram' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Dung lượng</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->capacity }} GB</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Bus</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->speed }} MHz</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Modules</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->modules }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">CAS Latency</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->cas_latency }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">DDR</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->ddr_gen }}</div>
+                            </div>
+
+                        @elseif($type === 'storage' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Dung lượng</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->capacity }} GB</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Loại</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->type }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Form Factor</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->form_factor }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Interface</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->interface }}</div>
+                            </div>
+
+                        @elseif($type === 'motherboard' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Socket</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->socket }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Form Factor</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->form_factor }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">RAM tối đa</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->max_memory }} GB</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Số khe RAM</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->memory_slots }}</div>
+                            </div>
+
+                        @elseif($type === 'psu' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Chuẩn</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->type }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Công suất</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->wattage }} W</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Efficiency</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->efficiency }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Modular</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->modular ? 'Có' : 'Không' }}</div>
+                            </div>
+
+                        @elseif($type === 'cooler' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">RPM</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->rpm }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Độ ồn</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->noise_level }} dB</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Màu sắc</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->color }}</div>
+                            </div>
+
+                        @elseif($type === 'case' && $spec)
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Loại case</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->type }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Màu sắc</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->color }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Side Panel</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->side_panel }}</div>
+                            </div>
+
+                            <div class="grid grid-cols-2">
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Thể tích</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->external_volume }} L</div>
+                            </div>
+
+                        @endif
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="mt-8 border border-gray-300 bg-white">
+        <div class="px-6 py-4 border-b border-gray-300">
+            <h2 class="text-xl font-black uppercase tracking-wide">
+                Biến động giá
+            </h2>
+        </div>
+
+        <div class="p-6">
+            <div class="h-[350px] border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-sm uppercase tracking-wide">
+                Biểu đồ giá sẽ hiển thị tại đây
+            </div>
+        </div>
+    </div>
+
+</div>
+@endsection

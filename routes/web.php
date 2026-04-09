@@ -51,7 +51,36 @@ Route::get('/linh-kien/{type}', function ($type) {
     })->name('components.index');
 
     Route::get('/linh-kien/{type}/{id}', function ($type, $id) {
-        return view('pages.components.show');
+    $map = [
+        'cpu' => 'cpu',
+        'gpu' => 'gpu',
+        'ram' => 'ram',
+        'storage' => 'storage',
+        'motherboard' => 'motherboard',
+        'psu' => 'psu',
+        'cooler' => 'cooler',
+        'case' => 'case_'
+    ];
+
+    if (!array_key_exists($type, $map)) {
+        abort(404);
+    }
+
+    $relation = $map[$type];
+
+    $component = Component::with([$relation, 'prices'])
+        ->findOrFail($id);
+
+    $spec = $component->$relation;
+
+    $price = $component->prices->min('price');
+
+    return view('pages.components.show', compact(
+        'component',
+        'spec',
+        'price',
+        'type'
+    ));
     })->name('components.show');
 
     // Diễn đàn
@@ -68,5 +97,7 @@ Route::get('/linh-kien/{type}', function ($type) {
         Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
         Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     });
+
+    Route::get('/huong-dan', fn() => view('pages.guides.index'))->name('guides.index');
 
     require __DIR__.'/auth.php';
