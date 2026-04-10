@@ -40,8 +40,30 @@ Route::get('/linh-kien/{type}/{id}', function ($type, $id) {
 })->name('components.show');
 
 // PC Builder
-Route::get('/builder', fn() => view('pages.builder.manual'))->name('builder.manual');
+Route::get('/builder', [BuildController::class, 'index'])->name('builder.manual');
 Route::get('/builder/goi-y', fn() => view('pages.builder.recommend'))->name('builder.recommend');
+
+// Build PC chi tiết
+Route::prefix('build-pc')->name('build.')->group(function () {
+    
+    // Trang chủ hiển thị danh sách các mục cần chọn (CPU, RAM, VGA...)
+    Route::get('/', [BuildController::class, 'index'])->name('index');
+
+    // Trang hiển thị danh sách linh kiện theo từng loại (category) để người dùng chọn
+    // Ví dụ: /build-pc/select/cpu
+    Route::get('/select/{category}', [BuildController::class, 'select'])->name('select');
+
+    // Route xử lý việc "nhấn nút chọn" một sản phẩm cụ thể
+    // Sử dụng POST hoặc GET tùy cách bạn làm, ở đây dùng GET cho đơn giản với link
+    Route::get('/add/{category}/{component_id}', [BuildController::class, 'addComponent'])->name('add');
+
+    // Xóa một linh kiện đã chọn ra khỏi cấu hình
+    Route::get('/remove/{category}', [BuildController::class, 'removeComponent'])->name('remove');
+
+    // Xóa toàn bộ cấu hình để làm lại từ đầu
+    Route::get('/reset', [BuildController::class, 'reset'])->name('reset');
+});
+
 
 // Diễn đàn
 Route::get('/forum', [ForumController::class, 'index'])->name('forum.index');
