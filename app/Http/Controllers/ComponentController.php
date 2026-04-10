@@ -23,7 +23,7 @@ class ComponentController extends Controller
         $typeId = $typeMap[$type];
 
         $specRelation = match($type) {
-            'case' => 'case_',
+            'case' => 'pcCase',
             default => $type,
         };
 

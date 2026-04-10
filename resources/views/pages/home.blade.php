@@ -91,7 +91,7 @@
 
 
 {{-- Section: FAQ --}}
-<section class="max-w-7xl mx-auto px-8 py-16 border-t border-gray-200">
+<section id="faq-section" class="max-w-7xl mx-auto px-8 py-16 border-t border-gray-200">
     <div class="text-center mb-10">
         <h2 class="text-3xl font-black uppercase">Câu hỏi thường gặp</h2>
         <p class="text-gray-500 text-sm mt-2">Tổng hợp các câu hỏi phổ biến nhất.</p>

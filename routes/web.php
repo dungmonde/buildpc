@@ -46,6 +46,7 @@ Route::get('/builder/goi-y', fn() => view('pages.builder.recommend'))->name('bui
 // Diễn đàn
 Route::get('/forum', [ForumController::class, 'index'])->name('forum.index');
 Route::get('/forum/post/{id}', [ForumController::class, 'show'])->name('forum.show');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/forum/create', [ForumController::class, 'create'])->name('forum.create');
     Route::post('/forum/store', [ForumController::class, 'store'])->name('forum.store');

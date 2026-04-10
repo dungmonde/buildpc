@@ -1,0 +1,52 @@
+{
+  "22": {
+    "name": "Intel Core i5-3340",
+    "price": 223.01,
+    "scraped": "2026-04-10T08:24:06.109968"
+  },
+  "46": {
+    "name": "AMD EPYC 4244P",
+    "price": 180.99,
+    "scraped": "2026-04-10T08:24:17.807680"
+  },
+  "50": {
+    "name": "AMD EPYC 4364P",
+    "price": 328.18,
+    "scraped": "2026-04-10T08:24:30.639057"
+  },
+  "81": {
+    "name": "AMD EPYC 4344P",
+    "price": 199.0,
+    "scraped": "2026-04-10T08:24:40.212680"
+  },
+  "84": {
+    "name": "Intel Core i5-6402P",
+    "price": 19.9,
+    "scraped": "2026-04-10T08:24:49.476146"
+  },
+  "91": {
+    "name": "Intel Xeon E3-1275 V6",
+    "price": 14.49,
+    "scraped": "2026-04-10T08:25:02.327171"
+  },
+  "103": {
+    "name": "AMD EPYC 4564P",
+    "price": 41.0,
+    "scraped": "2026-04-10T08:25:14.959273"
+  },
+  "113": {
+    "name": "Intel Core i7-8086K",
+    "price": 44.41,
+    "scraped": "2026-04-10T08:25:27.882054"
+  },
+  "116": {
+    "name": "Intel Core i9-9900K (Standard Folding Box)",
+    "price": 78.42,
+    "scraped": "2026-04-10T08:25:41.189546"
+  },
+  "124": {
+    "name": "Intel Xeon E3-1245 V6",
+    "price": 8.49,
+    "scraped": "2026-04-10T08:25:54.114417"
+  }
+}

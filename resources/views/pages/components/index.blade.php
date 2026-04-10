@@ -200,7 +200,7 @@ $allCategories = [
                         'motherboard' => $item->motherboard,
                         'psu'         => $item->psu,
                         'cooler'      => $item->cooler,
-                        'case_'       => $item->case_,
+                        'pcCase'      => $item->pcCase,   // ← đổi 'case' thành 'pcCase'
                         default       => null,
                     };
                     $price = $item->cheapestPrice?->price;

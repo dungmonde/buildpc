@@ -6,6 +6,13 @@
     <title>@yield('title', 'PC Builder')</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
+<style>
+    /* Bật tính năng cuộn mượt cho toàn bộ trang web */
+    html {
+        scroll-behavior: smooth;
+    }
+</style>
+
 <body class="bg-white text-black font-sans">
 
     {{-- Navbar --}}
@@ -64,9 +71,8 @@
                 <h4 class="font-bold mb-3 text-sm uppercase tracking-wide">Thông tin</h4>
                 <ul class="space-y-2 text-sm text-gray-600">
                     <li><a href="#" class="hover:text-black">Giới thiệu</a></li>
-                    <li><a href="#" class="hover:text-black">Hướng dẫn</a></li>
-                    <li><a href="#" class="hover:text-black">Bảng giá</a></li>
-                    <li><a href="#" class="hover:text-black">FAQ</a></li>
+                    <li><a href="http://127.0.0.1:8000/huong-dan" class="hover:text-black">Hướng dẫn</a></li>
+                    <li><a href="#faq-section" class="hover:text-black">FAQ</a></li>
                 </ul>
             </div>
 
@@ -84,11 +90,11 @@
             <div>
                 <h4 class="font-bold mb-3 text-sm uppercase tracking-wide">Linh kiện</h4>
                 <ul class="space-y-2 text-sm text-gray-600">
-                    <li><a href="#" class="hover:text-black">CPU</a></li>
-                    <li><a href="#" class="hover:text-black">Card đồ họa</a></li>
-                    <li><a href="#" class="hover:text-black">Mainboard</a></li>
-                    <li><a href="#" class="hover:text-black">RAM</a></li>
-                    <li><a href="#" class="hover:text-black">Ổ cứng</a></li>
+                    <li><a href="http://127.0.0.1:8000/linh-kien/cpu" class="hover:text-black">CPU</a></li>
+                    <li><a href="http://127.0.0.1:8000/linh-kien/gpu" class="hover:text-black">Card đồ họa</a></li>
+                    <li><a href="http://127.0.0.1:8000/linh-kien/motherboard" class="hover:text-black">Mainboard</a></li>
+                    <li><a href="http://127.0.0.1:8000/linh-kien/ram" class="hover:text-black">RAM</a></li>
+                    <li><a href="http://127.0.0.1:8000/linh-kien/storage" class="hover:text-black">Ổ cứng</a></li>
                 </ul>
             </div>
         </div>

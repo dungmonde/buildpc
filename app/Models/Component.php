@@ -64,8 +64,8 @@ class Component extends Model
         return $this->hasOne(CpuCooler::class, 'component_id');
     }
 
-    public function case_()
+    public function pcCase()
     {
-        return $this->hasOne(Cases::class, 'component_id');
+        return $this->hasOne(Cases::class, 'component_id', 'id');
     }
 }
