@@ -62,7 +62,7 @@
             ['CPU', 'cpu', 'cpu.jpg'],
             ['Card đồ họa', 'gpu', 'gpu.jpg'],
             ['Mainboard', 'motherboard', 'mainboard.jpg'],
-            ['RAM', 'memory', 'ram.jpg'],
+            ['RAM', 'ram', 'ram.jpg'],
             ['Ổ cứng', 'storage', 'storage.jpg'],
             ['Nguồn', 'psu', 'power_supply.jpg'],
             ['Tản nhiệt', 'cooler', 'cpu_cooler.jpg'],
