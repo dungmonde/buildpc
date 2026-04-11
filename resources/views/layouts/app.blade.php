@@ -24,10 +24,22 @@
 
         {{-- Menu --}}
         <div class="hidden md:flex items-center gap-8 text-sm font-medium">
+            <a href="{{ route('home') }}" class="hover:underline">Trang chủ</a>
             <a href="{{ route('builder.manual') }}" class="hover:underline">Xây dựng</a>
             <a href="{{ route('builder.recommend') }}" class="hover:underline">Gợi ý cấu hình</a>
             <a href="{{ route('forum.index') }}" class="hover:underline">Diễn đàn</a>
             <a href="{{ route('guides.index') }}" class="hover:underline">Hướng dẫn</a>
+            @auth
+                @if(auth()->user()->role === 'admin')
+                    <a href="{{ route('dashboard') }}" class="text-sm font-semibold text-red-400 hover:underline">
+                        Admin
+                    </a>
+                @else
+                    <a href="{{ route('dashboard') }}" class="text-sm font-semibold hover:underline">
+                        Dashboard
+                    </a>
+                @endif
+            @endauth
         </div>
 
         {{-- Auth --}}

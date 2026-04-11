@@ -119,7 +119,7 @@
                 <div class="col-span-2">
                     <div class="flex items-center gap-2">
                         <div class="flex-1 bg-gray-100 h-1.5 rounded-full">
-                            <div class="bg-black h-1.5 rounded-full" style="width: {{ $score }}%"></div>
+                            <!-- <div class="bg-black h-1.5 rounded-full" style="width: {{ $score }}%"></div> -->
                         </div>
                         <span class="text-xs text-gray-400">{{ $score }}</span>
                     </div>

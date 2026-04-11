@@ -5,7 +5,7 @@
 @section('content')
 
 {{-- Hero Section --}}
-<section class="max-w-7xl mx-auto px-8 py-16">
+<section class="max-w-7xl mx-auto px-8 py-8">
     <div class="grid grid-cols-3 gap-8 items-center">
         
         {{-- Cột 1: Heading + CTA --}}
@@ -32,7 +32,7 @@
         <div class="flex justify-center">
             <img src="{{ asset('images/illustration/hero_pc_image.jpg') }}" 
                 alt="PC" 
-                class="w-200 h-200 object-contain">
+                class="w-128 h-128 object-contain">
         </div>
 
         {{-- Cột 3: Mô tả bên phải --}}
@@ -54,7 +54,7 @@
     </div>
 </section>
 
-<section class="max-w-7xl mx-auto px-8 py-16">
+<section class="max-w-7xl mx-auto px-8 py-8">
     <h2 class="text-3xl font-black uppercase mb-8">Linh kiện</h2>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -91,7 +91,7 @@
 
 
 {{-- Section: FAQ --}}
-<section id="faq-section" class="max-w-7xl mx-auto px-8 py-16 border-t border-gray-200">
+<section id="faq-section" class="max-w-7xl mx-auto px-8 py-8 border-t border-gray-200">
     <div class="text-center mb-10">
         <h2 class="text-3xl font-black uppercase">Câu hỏi thường gặp</h2>
         <p class="text-gray-500 text-sm mt-2">Tổng hợp các câu hỏi phổ biến nhất.</p>
@@ -118,57 +118,55 @@
 </section>
 
 {{-- Section: Diễn đàn --}}
-<section class="max-w-7xl mx-auto px-8 py-16 border-t border-gray-200">
+<section class="max-w-7xl mx-auto px-8 py-8 border-t border-gray-200">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-3xl font-black uppercase">Diễn đàn</h2>
         <a href="{{ route('forum.index') }}" class="text-sm underline hover:no-underline">Xem thêm</a>
     </div>
 
     <div class="divide-y divide-gray-200 border border-gray-200">
-        @foreach([
-            ['Tìm combo i5 14600KF và b760m', 'lapvu1337', '7', '60', '1 phút trước'],
-            ['Tìm combo mainchip 5600G', 'Còn Chút Gì Để Nhớ', '10', '159', '2 phút trước'],
-            ['Bán RX 6600XT MSI Gaming X Fullbox Giá Ngon', 'giolaomacbook', '5', '105', '5 phút trước'],
-            ['AMD âm thầm hồi sinh AM4 với Ryzen 5 5500X3D', 'techblog', '23', '1.2K', '10 phút trước'],
-            ['Mainboard B760 nào tốt nhất tầm 3 triệu?', 'nguyen_pc', '15', '320', '30 phút trước'],
-        ] as [$title, $author, $replies, $views, $time])
+        @forelse($posts as $post)
         <div class="flex items-center gap-4 px-4 py-4 hover:bg-gray-50 transition group">
             
-            {{-- Avatar --}}
             <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
-                {{ strtoupper(substr($author, 0, 1)) }}
+                {{ strtoupper(substr($post->user_name, 0, 1)) }}
             </div>
 
-            {{-- Nội dung --}}
             <div class="flex-1 min-w-0">
-                <a href="{{ route('forum.index') }}" class="font-semibold text-sm group-hover:underline line-clamp-1">
-                    {{ $title }}
+                <a href="{{ route('forum.show', $post->id) }}" 
+                   class="font-semibold text-sm group-hover:underline line-clamp-1">
+                    {{ $post->title }}
                 </a>
-                <p class="text-xs text-gray-400 mt-0.5">{{ $author }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ $post->user_name }}</p>
             </div>
 
-            {{-- Stats --}}
             <div class="hidden md:flex items-center gap-6 text-xs text-gray-400 shrink-0">
                 <div class="text-center">
-                    <p class="font-semibold text-gray-700">{{ $replies }}</p>
+                    <p class="font-semibold text-gray-700">{{ $post->replies ?? 0 }}</p>
                     <p>Trả lời</p>
                 </div>
                 <div class="text-center">
-                    <p class="font-semibold text-gray-700">{{ $views }}</p>
+                    <p class="font-semibold text-gray-700">{{ $post->views ?? 0 }}</p>
                     <p>Lượt xem</p>
                 </div>
                 <div class="text-right min-w-[80px]">
-                    <p class="text-gray-500">{{ $time }}</p>
+                    <p class="text-gray-500">
+                        {{ \Carbon\Carbon::parse($post->created_at)->diffForHumans() }}
+                    </p>
                 </div>
             </div>
 
         </div>
-        @endforeach
+        @empty
+        <div class="text-center py-6 text-gray-500 text-sm">
+            Chưa có bài viết nào
+        </div>
+        @endforelse
     </div>
 </section>
 
 {{-- Section: Cần hỗ trợ --}}
-<section class="max-w-7xl mx-auto px-8 py-16 border-t border-gray-200">
+<section class="max-w-7xl mx-auto px-8 py-8 border-t border-gray-200">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
         <div>
             <h2 class="text-3xl font-black uppercase">Cần hỗ trợ?</h2>

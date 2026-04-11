@@ -6,9 +6,22 @@ use App\Http\Controllers\BuildController;
 use App\Http\Controllers\ComponentController;
 use App\Models\Component;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\AdminComponentController;
 
 // Trang chủ
-Route::get('/', fn() => view('pages.home'))->name('home');
+use Illuminate\Support\Facades\DB;
+
+Route::get('/', function () {
+
+    $posts = DB::table('posts')
+        ->orderByDesc('created_at')
+        ->limit(5)
+        ->get();
+
+    return view('pages.home', compact('posts'));
+
+})->name('home');
 
 // Hướng dẫn
 Route::get('/huong-dan', fn() => view('pages.guides.index'))->name('guides.index');
@@ -74,15 +87,29 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/forum/store', [ForumController::class, 'store'])->name('forum.store');
 });
 
-// Dashboard
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// Dashboard
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware('auth')
+    ->name('dashboard');
+
+Route::get('/linh-kien', [ComponentController::class, 'all'])->name('components.all');
+ 
+// Quản lý linh kiện — chỉ admin
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/components/create',          [AdminComponentController::class, 'create'])->name('components.create');
+    Route::post('/components',                [AdminComponentController::class, 'store'])->name('components.store');
+    Route::get('/components/{id}/edit',       [AdminComponentController::class, 'edit'])->name('components.edit');
+    Route::put('/components/{id}',            [AdminComponentController::class, 'update'])->name('components.update');
+    Route::delete('/components/{id}',         [AdminComponentController::class, 'destroy'])->name('components.destroy');
+    Route::get('/components/{id}/price',      [AdminComponentController::class, 'editPrice'])->name('components.price');
+    Route::put('/components/{id}/price',      [AdminComponentController::class, 'updatePrice'])->name('components.update-price');
 });
 
 require __DIR__.'/auth.php';
