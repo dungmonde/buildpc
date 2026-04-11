@@ -11,13 +11,11 @@ class Component extends Model
 
     protected $fillable = ['name', 'type_id'];
 
-    // Relationship tới bảng type
     public function componentType()
     {
         return $this->belongsTo(ComponentType::class, 'type_id');
     }
 
-    // Relationship tới bảng giá (lấy giá thấp nhất)
     public function prices()
     {
         return $this->hasMany(ComponentPrice::class, 'component_id');
@@ -25,10 +23,9 @@ class Component extends Model
 
     public function cheapestPrice()
     {
-        return $this->hasOne(ComponentPrice::class, 'component_id')->orderBy('price');
+        return $this->hasOne(ComponentPrice::class, 'component_id')->orderBy('price', 'asc');
     }
 
-    // Spec tables — mỗi loại join 1 bảng riêng
     public function cpu()
     {
         return $this->hasOne(Cpu::class, 'component_id');
@@ -66,6 +63,6 @@ class Component extends Model
 
     public function pcCase()
     {
-        return $this->hasOne(Cases::class, 'component_id', 'id');
+        return $this->hasOne(Cases::class, 'component_id');
     }
 }

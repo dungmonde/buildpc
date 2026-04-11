@@ -1,6 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+$imgMap = [
+    'cpu' => 'cpu',
+    'vga' => 'gpu',
+    'mainboard' => 'motherboard',
+    'ram' => 'ram',
+    'storage' => 'storage',
+    'psu' => 'psu',
+    'case' => 'case'
+];
+@endphp
 <div class="bg-slate-50 min-h-screen py-10 px-4">
     <div class="max-w-6xl mx-auto">
         <div class="mb-8 flex items-center justify-between">
@@ -14,10 +25,9 @@
                 
                 <div class="flex gap-6">
                     {{-- Ảnh linh kiện --}}
-                    <div class="w-32 h-32 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-50 group-hover:scale-105 transition-transform">
-                        <img src="{{ $item->image_url ?? 'https://via.placeholder.com/150' }}" 
-                            alt="{{ $item->name }}" 
-                            class="object-contain w-full h-full p-2">
+                    <div class="w-28 h-28 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden border border-gray-50 group-hover:scale-105 transition-transform">
+                        <img src="{{ asset('images/components/' . ($imgMap[$category] ?? $category) . '/' . $item->id . '.jpg') }}"
+                            onerror="this.src='https://via.placeholder.com/150'">
                     </div>
 
                     {{-- Thông tin tên và giá --}}
@@ -26,7 +36,7 @@
                             {{ $item->name }}
                         </h3>
                         <p class="text-2xl font-black text-purple-600 italic">
-                            {{ number_format($item->price ?? 0) }} <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">VNĐ</span>
+                            {{ number_format($item->cheapestPrice?->price ?? 0) }} <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">VNĐ</span>
                         </p>
                     </div>
                 </div>
@@ -48,4 +58,5 @@
         </div>
     </div>
 </div>
+
 @endsection
