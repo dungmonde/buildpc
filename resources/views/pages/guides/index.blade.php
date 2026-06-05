@@ -4,9 +4,9 @@
 
 @section('content')
 
-{{-- Header --}}
-<div class="bg-gray-800 text-white text-center py-6">
-    <h1 class="text-2xl font-bold">Hướng dẫn cấu hình</h1>
+{{-- Header (no border) --}}
+<div class="text-center py-8 px-6 max-w-7xl mx-auto mb-10 bg-white">
+    <h1 class="text-2xl font-bold text-slate-900">Hướng dẫn cấu hình</h1>
 </div>
 
 <div class="max-w-7xl mx-auto px-8 py-10">
@@ -19,9 +19,6 @@
                 'title' => 'Cấu hình AMD Gaming Phổ thông',
                 'cpu' => 'AMD Ryzen 5 7600X',
                 'gpu' => 'GeForce RTX 5060 Ti',
-                'case' => 'Montech XR ATX Mid Tower',
-                'price' => '25.500.000 ₫',
-                'comments' => 48,
                 'case_img' => 'case-1.jpg',
                 'cpu_img' => '9600x.jpg',
                 'gpu_img' => '5060ti.jpg',
@@ -115,9 +112,9 @@
                 'gpu_img' => '5090.jpg',
             ],
         ] as $build)
-        <a href="#" class="border border-gray-200 bg-white hover:border-black transition group block">
+        <a href="{{ route('build.apply-guide', ['cpu' => $build['cpu'], 'gpu' => $build['gpu']]) }}" class="group relative flex flex-col items-center justify-center p-6 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-slate-300">
             {{-- 3 Ảnh xếp như PCPartPicker --}}
-            <div class="bg-white h-44 relative overflow-hidden">
+            <div class="bg-white h-44 relative overflow-hidden w-full">
                 @if($build['case_img'] || $build['cpu_img'] || $build['gpu_img'])
                     <img src="{{ asset('images/guides/' . $build['case_img']) }}"
                          class="absolute bottom-0 left-2 h-36 object-contain" alt="Case">
@@ -140,11 +137,6 @@
                 </h3>
                 <p class="text-xs text-gray-500">{{ $build['cpu'] }}</p>
                 <p class="text-xs text-gray-500 mt-0.5">{{ $build['gpu'] }}</p>
-                <p class="text-xs text-gray-500 mt-0.5">{{ $build['case'] }}</p>
-                <div class="flex items-center justify-between mt-4">
-                    <span class="font-black text-sm">{{ $build['price'] }}</span>
-                    <span class="text-xs text-gray-400">💬 {{ $build['comments'] }}</span>
-                </div>
             </div>
         </a>
         @endforeach
@@ -210,8 +202,8 @@
                 'gpu_img' => 'ram.jpg',
             ],
         ] as $build)
-        <a href="#" class="border border-gray-200 bg-white hover:border-black transition group block">
-            <div class="bg-white h-44 relative overflow-hidden">
+        <a href="{{ route('build.apply-guide', ['cpu' => $build['cpu'], 'gpu' => $build['gpu']]) }}" class="group relative flex flex-col items-center justify-center p-6 rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md hover:ring-slate-300">
+            <div class="bg-white h-44 relative overflow-hidden w-full">
                 @if($build['case_img'] || $build['cpu_img'] || $build['gpu_img'])
                     <img src="{{ asset('images/guides/' . $build['case_img']) }}"
                          class="absolute bottom-0 left-2 h-36 object-contain" alt="Case">
@@ -232,11 +224,6 @@
                 </h3>
                 <p class="text-xs text-gray-500">{{ $build['cpu'] }}</p>
                 <p class="text-xs text-gray-500 mt-0.5">{{ $build['gpu'] }}</p>
-                <p class="text-xs text-gray-500 mt-0.5">{{ $build['case'] }}</p>
-                <div class="flex items-center justify-between mt-4">
-                    <span class="font-black text-sm">{{ $build['price'] }}</span>
-                    <span class="text-xs text-gray-400">💬 {{ $build['comments'] }}</span>
-                </div>
             </div>
         </a>
         @endforeach

@@ -5,21 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'PC Builder')</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        /* Bật tính năng cuộn mượt cho toàn bộ trang web */
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
 </head>
-<style>
-    /* Bật tính năng cuộn mượt cho toàn bộ trang web */
-    html {
-        scroll-behavior: smooth;
-    }
-</style>
 
-<body class="bg-white text-black font-sans">
+<body class="bg-white text-slate-900 font-sans antialiased">
 
     {{-- Navbar --}}
-    <nav class="border-b border-gray-200 px-8 py-4 flex items-center justify-between">
+    <nav class="border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
         {{-- Logo --}}
-        <a href="/" class="font-black text-lg tracking-tight border-2 border-black px-2 py-1">
-            PC BUILDER
+        <a href="/" class="inline-flex items-center">
+            <img src="{{ asset('images/logo.jpg') }}" alt="PC Builder" class="h-10 w-auto object-contain">
         </a>
 
         {{-- Menu --}}
@@ -45,18 +46,35 @@
         {{-- Auth --}}
         <div class="flex items-center gap-3">
             @auth
-                <span class="text-sm text-gray-600">{{ auth()->user()->name }}</span>
+                @php
+                    $avatarUrl = null;
+                    foreach (['jpg','jpeg','png','webp'] as $ext) {
+                        $path = public_path("images/user/" . auth()->id() . ".{$ext}");
+                        if (file_exists($path)) {
+                            $avatarUrl = asset("images/user/" . auth()->id() . ".{$ext}");
+                            break;
+                        }
+                    }
+                @endphp
+                <a href="{{ route('profile.edit') }}" class="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 hover:bg-slate-100 transition text-sm text-slate-700">
+                    @if($avatarUrl)
+                        <img src="{{ $avatarUrl }}" alt="Avatar" class="h-8 w-8 rounded-full object-cover">
+                    @else
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-semibold">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+                    @endif
+                    <span>{{ auth()->user()->name }}</span>
+                </a>
                 <form method="POST" action="{{ route('logout') }}" class="inline">
                     @csrf
-                    <button type="submit" class="text-sm border border-black px-4 py-1.5 hover:bg-black hover:text-white transition">
+                    <button type="submit" class="text-sm border border-black px-4 py-1.5 rounded-full hover:bg-black hover:text-white transition">
                         Đăng xuất
                     </button>
                 </form>
             @else
-                <a href="{{ route('login') }}" class="text-sm border border-black px-4 py-1.5 hover:bg-black hover:text-white transition">
+                <a href="{{ route('login') }}" class="text-sm border border-black px-4 py-1.5 rounded-full hover:bg-black hover:text-white transition">
                     Đăng nhập
                 </a>
-                <a href="{{ route('register') }}" class="text-sm bg-black text-white px-4 py-1.5 hover:bg-gray-800 transition">
+                <a href="{{ route('register') }}" class="text-sm bg-black text-white px-4 py-1.5 rounded-full hover:bg-gray-800 transition">
                     Đăng ký
                 </a>
             @endauth
@@ -64,16 +82,39 @@
     </nav>
 
     {{-- Nội dung trang --}}
-    @yield('content')
+    <main class="min-h-screen">
+        <div class="max-w-7xl mx-auto px-6 py-10">
+            @yield('content')
+        </div>
+    </main>
+
+    @if(session('success'))
+        <div id="flash-message" class="fixed bottom-6 right-6 z-50 max-w-xs rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-2xl shadow-slate-900/5 text-sm text-slate-900 ring-1 ring-slate-200 transition duration-300">
+            <div class="flex items-start gap-3">
+                <span class="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
+                <div class="flex-1">
+                    <p class="font-semibold">Thành công</p>
+                    <p class="text-slate-600">{{ session('success') }}</p>
+                </div>
+                <button type="button" onclick="document.getElementById('flash-message').remove()" class="text-slate-400 hover:text-slate-600 transition">✕</button>
+            </div>
+        </div>
+        <script>
+            setTimeout(function () {
+                var msg = document.getElementById('flash-message');
+                if (msg) msg.remove();
+            }, 3500);
+        </script>
+    @endif
 
     {{-- Footer --}}
     <footer class="border-t border-gray-200 mt-20">
-        <div class="max-w-7xl mx-auto px-8 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div class="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
             {{-- Logo + contact --}}
             <div>
-                <div class="font-black text-lg tracking-tight border-2 border-black px-2 py-1 inline-block mb-4">
-                    PC BUILDER
-                </div>
+                <a href="/" class="inline-flex items-center mb-4">
+                    <img src="{{ asset('images/logo.jpg') }}" alt="PC Builder" class="h-10 w-auto object-contain">
+                </a>
                 <p class="text-sm text-gray-500 mt-2">✉ support@pcbuilder.vn</p>
                 <p class="text-sm text-gray-500 mt-1">☎ 0123-456-789</p>
             </div>

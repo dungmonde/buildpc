@@ -97,11 +97,28 @@ $allCategories = [
     'cooler'      => 'Tản nhiệt',
     'case'        => 'Case',
 ];
+
+$buildCategoryMap = [
+    'cpu'         => 'cpu',
+    'gpu'         => 'vga',
+    'ram'         => 'ram',
+    'storage'     => 'storage',
+    'motherboard' => 'mainboard',
+    'psu'         => 'psu',
+    'cooler'      => 'cooler',
+    'case'        => 'case',
+];
 @endphp
 
 @section('title', 'Chọn ' . $label)
 
 @section('content')
+
+<!-- Header without border (no .card to avoid border) -->
+<div class="text-center py-8 px-6 max-w-7xl mx-auto mb-10 bg-white">
+    <h1 class="text-2xl font-bold text-slate-900">Chọn {{ $label }}</h1>
+</div>
+
 <div class="max-w-7xl mx-auto px-8 py-10">
 
     <nav class="text-xs text-gray-400 mb-6 flex items-center gap-2">
@@ -113,22 +130,22 @@ $allCategories = [
     <div class="flex flex-wrap gap-2 mb-8">
         @foreach($allCategories as $slug => $name)
         <a href="{{ route('components.index', $slug) }}"
-           class="text-xs px-3 py-1.5 border transition
+           class="text-xs px-3 py-1.5 transition inline-flex items-center justify-center text-sm font-medium
                   {{ $slug === $type
-                     ? 'border-black bg-black text-white'
-                     : 'border-gray-200 text-gray-600 hover:border-black hover:text-black' }}">
+                     ? 'rounded-full bg-slate-900 text-white shadow-sm px-4 py-2'
+                     : 'rounded-full bg-white ring-1 ring-slate-200 text-slate-700 hover:shadow-sm px-4 py-2' }}">
             {{ $name }}
         </a>
         @endforeach
     </div>
 
-    <h1 class="text-3xl font-black uppercase mb-8">Chọn {{ $label }}</h1>
+    {{-- Title is shown above in the header card for consistency with other pages --}}
 
     <form action="{{ route('components.index', $type) }}" method="GET" class="flex gap-8" id="filterForm">
 
         {{-- SIDEBAR LỌC --}}
         <aside class="w-56 shrink-0 text-sm">
-            <div class="border border-gray-200 p-4 mb-3">
+            <div class="rounded-2xl bg-white ring-1 ring-slate-200 p-4 mb-3 shadow-sm">
                 <h3 class="font-bold uppercase text-xs tracking-wide mb-3">Giá</h3>
                 <div class="space-y-2 text-gray-600">
                     @foreach(['Dưới 3 triệu' => '0-3000000', '3 - 5 triệu' => '3000000-5000000', '5 - 10 triệu' => '5000000-10000000', 'Trên 10 triệu' => '10000000-999999999'] as $lbl => $val)
@@ -142,10 +159,9 @@ $allCategories = [
                 @endif
             </div>
 
-            {{-- Đổ các bộ lọc động quét từ Database --}}
             @foreach($dynamicFilters as $colKey => $filter)
             @php $reqKey = 'f_' . $colKey; @endphp
-            <div class="border border-gray-200 p-4 mb-3">
+            <div class="rounded-2xl bg-white ring-1 ring-slate-200 p-4 mb-3 shadow-sm">
                 <h3 class="font-bold uppercase text-xs tracking-wide mb-3">{{ $filter['label'] }}</h3>
                 <div class="space-y-2 text-gray-600 max-h-56 overflow-y-auto pr-1">
                     @foreach($filter['options'] as $opt)
@@ -167,9 +183,9 @@ $allCategories = [
                     Hiển thị <span class="font-semibold text-black">{{ $components->total() }}</span> kết quả
                 </p>
                 <div class="flex items-center gap-3">
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Tìm kiếm {{ $label }}..."
-                           class="border border-gray-200 text-sm px-3 py-2 w-48 focus:outline-none focus:border-black">
-                    <select name="sort" onchange="this.form.submit()" class="border border-gray-200 text-sm px-3 py-2 focus:outline-none focus:border-black">
+                              <input type="text" name="search" value="{{ request('search') }}" placeholder="Tìm kiếm {{ $label }}..."
+                                  class="rounded-full text-sm px-4 py-2 w-48 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300">
+                              <select name="sort" onchange="this.form.submit()" class="rounded-full text-sm px-4 py-2 ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-300">
                         <option value="">Mặc định</option>
                         <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Giá: Thấp → Cao</option>
                         <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Giá: Cao → Thấp</option>
@@ -179,9 +195,9 @@ $allCategories = [
                 </div>
             </div>
 
-            <div class="border border-gray-200">
+            <div class="rounded-3xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
 
-                <div class="flex px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-bold uppercase tracking-wide text-gray-500 gap-2">
+                <div class="flex px-4 py-2 bg-gray-50 text-xs font-bold uppercase tracking-wide text-gray-500 gap-2">
                     <div class="w-10 shrink-0"></div>
                     <div class="flex-1">Tên</div>
                     @foreach($cols as $col)
@@ -247,9 +263,10 @@ $allCategories = [
                         @else
                         <p class="text-xs text-gray-400">Liên hệ</p>
                         @endif
-                        <button type="button" class="mt-1 text-xs border border-black px-2 py-1 hover:bg-black hover:text-white transition">
+                        <a href="{{ route('build.add', ['category' => $buildCategoryMap[$type] ?? $type, 'component_id' => $item->id]) }}"
+                           class="mt-1 text-xs inline-flex items-center justify-center rounded-full bg-slate-900 text-white px-3 py-1.5 font-semibold shadow-sm hover:bg-slate-800 transition">
                             + Thêm
-                        </button>
+                        </a>
                     </div>
 
                 </div>

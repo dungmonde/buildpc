@@ -22,7 +22,8 @@ class PcBuild extends Model
 
     public function components()
     {
-        return $this->belongsToMany(Component::class, 'build_components')
+        // pivot table uses `build_id` and `component_id` columns
+        return $this->belongsToMany(Component::class, 'build_components', 'build_id', 'component_id')
                     ->withPivot('quantity');
     }
 

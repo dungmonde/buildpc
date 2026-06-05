@@ -28,13 +28,20 @@ class AdminComponentController extends Controller
             'name'       => 'required|string|max:255',
             'type_id'    => 'required|integer|exists:component_types,id',
             'base_price' => 'required|numeric|min:0',
+            'image'      => 'nullable|image|mimes:jpg,jpeg|max:5120',
         ]);
 
-        DB::table('components')->insert([
+        $componentId = DB::table('components')->insertGetId([
             'name'       => $validated['name'],
             'type_id'    => $validated['type_id'],
             'base_price' => $validated['base_price'],
         ]);
+
+        if ($request->hasFile('image')) {
+            $typeName = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');
+            $categorySlug = $this->mapTypeNameToSlug($typeName);
+            $this->saveComponentImage($request->file('image'), $categorySlug, $componentId);
+        }
 
         return redirect()->route('dashboard')
             ->with('success', 'Thêm linh kiện thành công!');
@@ -61,15 +68,82 @@ class AdminComponentController extends Controller
         $validated = $request->validate([
             'name'    => 'required|string|max:255',
             'type_id' => 'required|integer|exists:component_types,id',
+            'image'   => 'nullable|image|mimes:jpg,jpeg|max:5120',
         ]);
+
+        $component = DB::table('components')->where('id', $id)->first();
+        if (!$component) {
+            abort(404);
+        }
+
+        if ($component->type_id !== $validated['type_id']) {
+            $oldType = DB::table('component_types')->where('id', $component->type_id)->value('type_name');
+            $newType = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');
+            $oldSlug = $this->mapTypeNameToSlug($oldType);
+            $newSlug = $this->mapTypeNameToSlug($newType);
+            $oldPath = public_path("images/components/{$oldSlug}/{$id}.jpg");
+            $newDir = public_path("images/components/{$newSlug}");
+            $newPath = "{$newDir}/{$id}.jpg";
+
+            if (file_exists($oldPath)) {
+                if (!is_dir($newDir)) {
+                    mkdir($newDir, 0755, true);
+                }
+                rename($oldPath, $newPath);
+            }
+        }
 
         DB::table('components')->where('id', $id)->update([
             'name'    => $validated['name'],
             'type_id' => $validated['type_id'],
         ]);
 
+        if ($request->hasFile('image')) {
+            $typeName = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');
+            $categorySlug = $this->mapTypeNameToSlug($typeName);
+            $this->saveComponentImage($request->file('image'), $categorySlug, $id);
+        }
+
         return redirect()->route('dashboard')
             ->with('success', 'Cập nhật linh kiện thành công!');
+    }
+
+    private function saveComponentImage($image, $categorySlug, $componentId)
+    {
+        $folder = public_path('images/components/' . $categorySlug);
+        if (!is_dir($folder)) {
+            mkdir($folder, 0755, true);
+        }
+
+        $image->move($folder, $componentId . '.jpg');
+    }
+
+    private function mapTypeNameToSlug(?string $typeName): string
+    {
+        if (!$typeName) {
+            return 'other';
+        }
+
+        $slug = strtolower(trim($typeName));
+        $slugMap = [
+            'cpu'                => 'cpu',
+            'video card'         => 'gpu',
+            'gpu'                => 'gpu',
+            'graphics card'      => 'gpu',
+            'memory'             => 'ram',
+            'ram'                => 'ram',
+            'internal hard drive' => 'storage',
+            'storage'            => 'storage',
+            'ssd'                => 'storage',
+            'motherboard'        => 'motherboard',
+            'power supply'       => 'psu',
+            'psu'                => 'psu',
+            'cpu cooler'         => 'cooler',
+            'cooler'             => 'cooler',
+            'case'               => 'case',
+        ];
+
+        return $slugMap[$slug] ?? str_replace(' ', '-', $slug);
     }
 
     // Xoá linh kiện

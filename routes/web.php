@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\RecommendController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ForumController;
 use App\Http\Controllers\BuildController;
@@ -13,9 +13,8 @@ use App\Http\Controllers\AdminComponentController;
 use Illuminate\Support\Facades\DB;
 
 Route::get('/', function () {
-
-    $posts = DB::table('posts')
-        ->orderByDesc('created_at')
+    $posts = App\Models\Post::with('user')
+        ->latest()
         ->limit(5)
         ->get();
 
@@ -54,29 +53,29 @@ Route::get('/linh-kien/{type}/{id}', function ($type, $id) {
 
 // PC Builder
 Route::get('/builder', [BuildController::class, 'index'])->name('builder.manual');
-Route::get('/builder/goi-y', fn() => view('pages.builder.recommend'))->name('builder.recommend');
+Route::get('/builder/goi-y', [RecommendController::class, 'index'])->name('builder.recommend');
+Route::post('/builder/goi-y', [RecommendController::class, 'recommend'])->name('builder.recommend.result');
+Route::post('/builder/goi-y/apply', [RecommendController::class, 'applyRecommend'])
+    ->middleware('auth')->name('build.apply-recommend');
 
 // Build PC chi tiết
 Route::prefix('build-pc')->name('build.')->group(function () {
-    
-    // Trang chủ hiển thị danh sách các mục cần chọn (CPU, RAM, VGA...)
+
     Route::get('/', [BuildController::class, 'index'])->name('index');
 
-    // Trang hiển thị danh sách linh kiện theo từng loại (category) để người dùng chọn
-    // Ví dụ: /build-pc/select/cpu
     Route::get('/select/{category}', [BuildController::class, 'select'])->name('select');
 
-    // Route xử lý việc "nhấn nút chọn" một sản phẩm cụ thể
-    // Sử dụng POST hoặc GET tùy cách bạn làm, ở đây dùng GET cho đơn giản với link
+    Route::get('/apply-guide', [BuildController::class, 'applyGuide'])->name('apply-guide');
+
     Route::get('/add/{category}/{component_id}', [BuildController::class, 'addComponent'])->name('add');
 
-    // Xóa một linh kiện đã chọn ra khỏi cấu hình
     Route::get('/remove/{category}', [BuildController::class, 'removeComponent'])->name('remove');
 
-    // Xóa toàn bộ cấu hình để làm lại từ đầu
     Route::get('/reset', [BuildController::class, 'reset'])->name('reset');
-});
 
+    Route::post('/save', [BuildController::class, 'save'])->name('save');
+    Route::get('/slot/{slot}', [BuildController::class, 'switchSlot'])->name('slot');
+});
 
 // Diễn đàn
 Route::get('/forum', [ForumController::class, 'index'])->name('forum.index');
@@ -93,6 +92,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// Bình luận
+Route::post('/forum/post/{id}/comment', [ForumController::class, 'storeComment'])
+     ->name('forum.comment.store')
+     ->middleware('auth');
 
 // Dashboard
 Route::get('/dashboard', [DashboardController::class, 'index'])

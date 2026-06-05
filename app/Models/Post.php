@@ -29,4 +29,9 @@ class Post extends Model
     {
         return $this->votes()->where('vote_type', 'up')->count();
     }
+
+    public function comments()
+    {
+        return $this->hasMany(Comment::class)->latest();
+    }
 }

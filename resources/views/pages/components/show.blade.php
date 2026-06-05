@@ -15,9 +15,9 @@
         <span class="text-black font-medium truncate">{{ $component->name }}</span>
     </div>
 
-    <div class="border border-gray-300 bg-white">
+    <div class="overflow-hidden bg-white">
 
-        <div class="border-b border-gray-300 px-6 py-4">
+        <div class="px-6 py-4 bg-gray-50 rounded-t-lg">
             <h1 class="text-3xl font-black uppercase tracking-wide">
                 {{ $component->name }}
             </h1>
@@ -25,8 +25,8 @@
 
         <div class="grid grid-cols-12 gap-8 p-6">
 
-            <div class="col-span-12 lg:col-span-3">
-                <div class="border border-gray-300 bg-gray-50 p-6 flex items-center justify-center min-h-[260px]">
+                <div class="col-span-12 lg:col-span-3">
+                <div class="bg-gray-50 p-6 flex items-center justify-center min-h-[260px]">
                     <img
                         src="{{ asset('images/components/' . $type . '/' . $component->id . '.jpg') }}"
                         class="max-h-[220px] w-auto object-contain"
@@ -34,7 +34,7 @@
                 </div>
 
                 @if($price)
-                    <div class="mt-4 border border-gray-300 p-4 text-center">
+                    <div class="mt-4 p-4 text-center bg-white">
                         <p class="text-xs uppercase tracking-wide text-gray-500 mb-2">
                             Giá hiện tại
                         </p>
@@ -46,9 +46,9 @@
             </div>
 
             <div class="col-span-12 lg:col-span-9">
-                <div class="border border-gray-300">
+                <div>
 
-                    <div class="px-5 py-4 border-b border-gray-300 bg-gray-50">
+                    <div class="px-5 py-4 bg-gray-50">
                         <h2 class="text-lg font-bold uppercase tracking-wide">
                             Thông số kỹ thuật
                         </h2>
@@ -251,8 +251,8 @@
         </div>
     </div>
 
-    <div class="mt-8 border border-gray-300 bg-white">
-        <div class="px-6 py-4 border-b border-gray-300">
+    <div class="mt-8 card">
+        <div class="px-6 py-4 bg-gray-50">
             <h2 class="text-xl font-black uppercase tracking-wide">
                 Biến động giá
             </h2>
@@ -260,7 +260,7 @@
 
         <div class="p-6">
             <div class="h-[350px] border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-sm uppercase tracking-wide">
-                Biểu đồ giá sẽ hiển thị tại đây
+                Chưa có dữ liệu 
             </div>
         </div>
     </div>

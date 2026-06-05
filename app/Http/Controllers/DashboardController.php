@@ -33,14 +33,14 @@ class DashboardController extends Controller
             ->toArray();
 
         $iconMap = [
-            'CPU'              => ['icon' => '⚡', 'color' => 'blue'],
-            'Video Card'       => ['icon' => '🎮', 'color' => 'green'],
-            'Memory'           => ['icon' => '💾', 'color' => 'purple'],
-            'Case'             => ['icon' => '📦', 'color' => 'orange'],
-            'Motherboard'      => ['icon' => '🔲', 'color' => 'red'],
-            'Power Supply'     => ['icon' => '🔌', 'color' => 'yellow'],
-            'Internal Hard Drive' => ['icon' => '💿', 'color' => 'pink'],
-            'CPU Cooler'       => ['icon' => '❄️', 'color' => 'cyan'],
+            'CPU'              => ['icon' => '', 'color' => 'blue'],
+            'Video Card'       => ['icon' => '', 'color' => 'green'],
+            'Memory'           => ['icon' => '', 'color' => 'purple'],
+            'Case'             => ['icon' => '', 'color' => 'orange'],
+            'Motherboard'      => ['icon' => '', 'color' => 'red'],
+            'Power Supply'     => ['icon' => '', 'color' => 'yellow'],
+            'Internal Hard Drive' => ['icon' => '', 'color' => 'pink'],
+            'CPU Cooler'       => ['icon' => '', 'color' => 'cyan'],
         ];
 
         // Lấy tất cả type_name thật từ DB, map icon nếu có
@@ -49,7 +49,7 @@ class DashboardController extends Controller
             return [
                 'name'  => $typeName,
                 'count' => $categoryCounts[$typeName] ?? 0,
-                'icon'  => $iconMap[$typeName]['icon'] ?? '🔩',
+                'icon'  => $iconMap[$typeName]['icon'] ?? '',
                 'color' => $iconMap[$typeName]['color'] ?? 'gray',
             ];
         })->toArray();

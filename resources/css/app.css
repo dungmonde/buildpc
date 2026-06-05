@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+@layer utilities {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-full font-semibold transition-all;
+  }
+  .btn-primary {
+    @apply bg-slate-900 text-white hover:bg-slate-700;
+  }
+  .card {
+    @apply rounded-3xl bg-white ring-1 ring-slate-200 shadow-sm;
+  }
+  .text-primary-600 {
+    @apply text-indigo-600;
+  }
+  .text-primary-700 {
+    @apply text-indigo-700;
+  }
+  .bg-primary-100 {
+    @apply bg-indigo-100;
+  }
+  .bg-primary-50 {
+    @apply bg-indigo-50;
+  }
+}

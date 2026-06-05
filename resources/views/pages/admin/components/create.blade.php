@@ -2,15 +2,15 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="min-h-screen bg-gray-950 text-white px-8 py-10">
+<div class="min-h-screen bg-slate-50 text-slate-900 px-8 py-10">
     <div class="max-w-2xl mx-auto">
 
         {{-- Header --}}
         <div class="mb-8">
-            <a href="{{ route('dashboard') }}" class="text-sm text-gray-400 hover:text-white transition-colors mb-3 inline-flex items-center gap-1">
+            <a href="{{ route('dashboard') }}" class="text-sm text-slate-500 hover:text-slate-900 transition-colors mb-3 inline-flex items-center gap-1">
                 ← Quay lại dashboard
             </a>
-            <h1 class="text-2xl font-bold text-white">Thêm linh kiện mới</h1>
+            <h1 class="text-2xl font-bold text-slate-900">Thêm linh kiện mới</h1>
         </div>
 
         @if($errors->any())
@@ -23,47 +23,53 @@
             </div>
         @endif
 
-        <form action="{{ route('admin.components.store') }}" method="POST" class="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5">
+        <form action="{{ route('admin.components.store') }}" method="POST" enctype="multipart/form-data" class="card p-6 space-y-5">
             @csrf
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Tên linh kiện *</label>
                 <input type="text" name="name" value="{{ old('name') }}"
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                    placeholder="VD: Intel Core i5-14600K" required>
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm"
+                    required>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Danh mục *</label>
-                    <select name="category" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 text-sm">
+                    <select name="type_id" required
+                        class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm">
                         <option value="">-- Chọn danh mục --</option>
-                        @foreach($categories as $cat)
-                            <option value="{{ $cat }}" {{ old('category') === $cat ? 'selected' : '' }}>{{ $cat }}</option>
+                        @foreach($categories as $id => $cat)
+                            <option value="{{ $id }}" {{ old('type_id') == $id ? 'selected' : '' }}>{{ $cat }}</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
                     <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Thương hiệu</label>
                     <input type="text" name="brand" value="{{ old('brand') }}"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                        placeholder="VD: Intel, AMD, ASUS...">
+                        class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm">
                 </div>
             </div>
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá (VNĐ) *</label>
                 <input type="number" name="price" value="{{ old('price') }}" min="0" step="1000"
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
-                    placeholder="VD: 5990000" required>
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm"
+                    required>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Ảnh linh kiện</label>
+                <input type="file" name="image"
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm"
+                    accept="image/jpeg,image/jpg">
+                <p class="text-xs text-slate-500 mt-2">Ảnh sẽ được lưu vào thư mục tương ứng với danh mục linh kiện.</p>
             </div>
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Thông số kỹ thuật</label>
                 <textarea name="specs" rows="4"
-                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm resize-none"
-                    placeholder="Nhập thông số kỹ thuật...">{{ old('specs') }}</textarea>
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm resize-none">{{ old('specs') }}</textarea>
             </div>
 
             <div class="flex gap-3 pt-2">
@@ -72,7 +78,7 @@
                     ＋ Thêm linh kiện
                 </button>
                 <a href="{{ route('dashboard') }}"
-                    class="px-6 bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors text-sm text-center">
+                    class="px-6 border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold py-2.5 rounded-xl transition-colors text-sm text-center">
                     Huỷ
                 </a>
             </div>
