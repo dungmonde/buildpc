@@ -15,23 +15,39 @@
         <div class="space-y-6">
             @foreach($posts as $post)
             <div class="card p-7 hover:shadow-md transition group">
-                <div class="flex items-center gap-5">
-                    <div class="flex-none">
-                        @include('components.user-avatar', ['user' => $post->user, 'size' => 12, 'class' => 'rounded-2xl bg-primary-100 text-primary-700'])
+                <div class="flex items-center justify-between gap-5">
+                    <div class="flex items-center gap-5 flex-1">
+                        <div class="flex-none">
+                            @include('components.user-avatar', ['user' => $post->user, 'size' => 12, 'class' => 'rounded-2xl bg-primary-100 text-primary-700'])
+                        </div>
+
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-xs font-bold px-3 py-1 bg-primary-50 text-primary-700 rounded-xl">Thảo luận</span>
+                                <span class="text-slate-500 text-sm">{{ $post->created_at->diffForHumans() }}</span>
+                            </div>
+                            <h2 class="text-xl font-semibold group-hover:text-primary-600 transition">
+                                <a href="{{ route('forum.show', $post->id) }}">{{ $post->title }}</a>
+                            </h2>
+                            <p class="text-sm text-slate-500 mt-2">
+                                Đăng bởi <span class="font-medium">{{ $post->user?->name ?? 'Người dùng' }}</span>
+                            </p>
+                        </div>
                     </div>
 
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <span class="text-xs font-bold px-3 py-1 bg-primary-50 text-primary-700 rounded-xl">Thảo luận</span>
-                            <span class="text-slate-500 text-sm">{{ $post->created_at->diffForHumans() }}</span>
-                        </div>
-                        <h2 class="text-xl font-semibold group-hover:text-primary-600 transition">
-                            <a href="{{ route('forum.show', $post->id) }}">{{ $post->title }}</a>
-                        </h2>
-                        <p class="text-sm text-slate-500 mt-2">
-                            Đăng bởi <span class="font-medium">{{ $post->user?->name ?? 'Người dùng' }}</span>
-                        </p>
+                    {{-- Delete button for post owner --}}
+                    @if(auth()->check() && auth()->id() === $post->user_id)
+                    <div class="flex-none">
+                        <form method="POST" action="{{ route('forum.destroy', $post->id) }}" 
+                              onsubmit="return confirm('Bạn chắc chắn muốn xóa bài viết này?')" class="inline">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="text-slate-400 hover:text-red-500 transition text-xl font-bold" title="Xóa bài viết">
+                                ✕
+                            </button>
+                        </form>
                     </div>
+                    @endif
                 </div>
             </div>
             @endforeach

@@ -16,27 +16,25 @@
                 <p class="text-sm font-semibold">{{ auth()->user()->email }}</p>
                 <p class="text-xs text-gray-400">Thành viên</p>
             </div>
-            <div class="w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-xs font-bold">
-                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-            </div>
+            @if(auth()->user()->avatar)
+                <img src="{{ asset('storage/' . auth()->user()->avatar) }}" alt="Avatar" class="w-9 h-9 rounded-full object-cover ring-1 ring-slate-200">
+            @else
+                <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                    {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                </div>
+            @endif
         </div>
     </div>
 
     <div class="px-8 py-8 max-w-5xl mx-auto">
 
         {{-- Stats --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
 
             <div class="card p-6 hover:shadow-sm transition">
                 <p class="text-xs text-slate-500 uppercase mb-2">Ngày tham gia</p>
                 <p class="text-lg font-bold">{{ auth()->user()->created_at->format('d/m/Y') }}</p>
                 <p class="text-xs text-slate-500 mt-1">{{ auth()->user()->created_at->diffForHumans() }}</p>
-            </div>
-
-            <div class="card p-6 hover:shadow-sm transition">
-                <p class="text-xs text-slate-500 uppercase mb-2">Cấu hình đã tạo</p>
-                <p class="text-3xl font-black">{{ $userStats['total_builds'] ?? 0 }}</p>
-                <p class="text-xs text-slate-500 mt-1">build PC của bạn</p>
             </div>
 
             <div class="card p-6 hover:shadow-sm transition">

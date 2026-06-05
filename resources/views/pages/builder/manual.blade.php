@@ -2,20 +2,48 @@
 
 @section('content')
 <div class="max-w-5xl mx-auto">
+        {{-- Messages --}}
+        @if ($errors->any())
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl">
+                @foreach ($errors->all() as $error)
+                    <p>{{ $error }}</p>
+                @endforeach
+            </div>
+        @endif
+
+        @if (session('success'))
+            <div class="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-2xl">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if (session('error'))
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl">
+                {{ session('error') }}
+            </div>
+        @endif
+
         <div class="mb-6 flex items-start justify-between">
             <div>
                 <h1 class="text-4xl font-bold text-slate-900">Xây dựng cấu hình PC</h1>
-                <p class="text-slate-500 mt-2">Chọn từng linh kiện để hoàn thiện bộ máy của bạn.</p>
+                <p class="text-slate-500 mt-2">Chọn từng linh kiện để hoàn thiện bộ máy của bạn. (Tối đa 10 cấu hình)</p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-full p-1 flex-wrap justify-end">
                 {{-- Build slots tabs (1..10) --}}
                 @php $active = $currentSlot ?? session('build_slot', 1); @endphp
-                <div class="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-full p-1">
-                    @for($i = 1; $i <= 10; $i++)
-                        <a href="{{ route('build.slot', $i) }}" class="px-3 py-1 rounded-full text-sm font-medium {{ $active == $i ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50' }}">{{ $i }}</a>
-                    @endfor
-                </div>
+                @php $slots = session('build_pc_slots', []); @endphp
+                @php $slotIds = session('build_slot_ids', []); @endphp
+                
+                @for($i = 1; $i <= 10; $i++)
+                    <div class="relative group">
+                        <a href="{{ route('build.slot', $i) }}" 
+                           class="px-3 py-1 rounded-full text-sm font-medium {{ $active == $i ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50' }}">
+                            {{ $i }}
+                        </a>
+                        
+                    </div>
+                @endfor
             </div>
         </div>
 
@@ -68,8 +96,17 @@
                     Làm mới
                 </a>
 
-                <form method="POST" action="{{ route('build.save') }}">
+                <form method="POST" action="{{ route('build.save') }}" class="flex items-center gap-3">
                     @csrf
+
+                    @php
+                        $activeSlot = $currentSlot ?? session('build_slot', 1);
+                        $slotIds = session('build_slot_ids', []);
+                        $existingName = isset($slotIds[$activeSlot]) 
+                            ? \App\Models\PcBuild::where('id', $slotIds[$activeSlot])->value('build_name') 
+                            : 'Cấu hình #' . $activeSlot;
+                    @endphp
+                    <input type="text" name="build_name" value="{{ $existingName }}" class="bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 outline-none focus:bg-white focus:border-slate-400 transition w-48 md:w-64" placeholder="Tên cấu hình..." required>
 
                     <button type="submit" class="btn btn-primary px-8 py-3">
                         Lưu cấu hình

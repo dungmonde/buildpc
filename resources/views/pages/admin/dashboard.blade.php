@@ -16,16 +16,20 @@
                 <p class="text-sm font-semibold">{{ auth()->user()->name }}</p>
                 <p class="text-xs text-slate-500">{{ auth()->user()->email }}</p>
             </div>
-            <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
-                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-            </div>
+            @if(auth()->user()->avatar)
+                <img src="{{ asset('storage/' . auth()->user()->avatar) }}" alt="Avatar" class="w-9 h-9 rounded-full object-cover ring-1 ring-slate-200">
+            @else
+                <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                    {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                </div>
+            @endif
         </div>
     </div>
 
     <div class="max-w-7xl mx-auto px-8 py-8">
 
         {{-- Stats --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
 
             <div class="card p-5 hover:shadow-sm transition">
                 <p class="text-xs text-slate-500 uppercase">Tổng linh kiện</p>
@@ -35,11 +39,6 @@
             <div class="card p-5 hover:shadow-sm transition">
                 <p class="text-xs text-slate-500 uppercase">Người dùng</p>
                 <h2 class="text-3xl font-black mt-2">{{ $stats['total_users'] ?? 0 }}</h2>
-            </div>
-
-            <div class="card p-5 hover:shadow-sm transition">
-                <p class="text-xs text-slate-500 uppercase">Build</p>
-                <h2 class="text-3xl font-black mt-2">{{ $stats['total_builds'] ?? 0 }}</h2>
             </div>
 
             <div class="card p-5 hover:shadow-sm transition">
@@ -81,88 +80,23 @@
                 <input type="text"
                        id="admin-component-search"
                        placeholder="Tìm kiếm..."
-                       class="flex-1 bg-white border border-slate-200 px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400">
+                       class="flex-1 bg-white border border-slate-200 px-4 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 rounded-2xl">
 
                 <select id="admin-category-filter"
-                        class="bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400">
+                        class="bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-slate-400 rounded-2xl">
                     <option value="">Tất cả</option>
                     @foreach($stats['categories'] ?? [] as $cat)
-                        <option value="{{ strtolower($cat['name']) }}">{{ $cat['name'] }}</option>
+                        <option value="{{ $cat['name'] }}" @if($selectedCategory === $cat['name']) selected @endif>
+                            {{ $cat['name'] }}
+                        </option>
                     @endforeach
                 </select>
             </div>
 
-            {{-- Table --}}
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm bg-white rounded-3xl overflow-hidden">
-                    <thead class="border-b border-slate-200 bg-slate-50">
-                        <tr>
-                            <th class="text-left py-3 px-3 text-xs text-slate-500 uppercase">Tên</th>
-                            <th class="text-left py-3 px-3 text-xs text-slate-500 uppercase">Danh mục</th>
-                            <th class="text-right py-3 px-3 text-xs text-slate-500 uppercase">Giá</th>
-                            <th class="text-center py-3 px-3 text-xs text-slate-500 uppercase">Thao tác</th>
-                        </tr>
-                    </thead>
-
-                    <tbody id="admin-components-table">
-                        @forelse($components ?? [] as $c)
-                            <tr class="border-b border-slate-200 hover:bg-slate-50"
-                                data-name="{{ strtolower($c->name) }}"
-                                data-category="{{ strtolower($c->category) }}">
-
-                                <td class="py-3 px-3 font-medium">{{ $c->name }}</td>
-
-                                <td class="py-3 px-3">
-                                    <span class="border border-slate-200 px-2 py-1 text-xs text-slate-700">
-                                        {{ $c->category }}
-                                    </span>
-                                </td>
-
-                                <td class="py-3 px-3 text-right font-semibold">
-                                    {{ number_format($c->price, 0, ',', '.') }}₫
-                                </td>
-
-                                <td class="py-3 px-3">
-                                    <div class="flex justify-center gap-2">
-
-                                        <a href="{{ route('admin.components.edit', $c->id) }}"
-                                           class="border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 transition">
-                                            Sửa
-                                        </a>
-
-                                        <a href="{{ route('admin.components.price', $c->id) }}"
-                                           class="border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 transition">
-                                            Giá
-                                        </a>
-
-                                        <form method="POST"
-                                              action="{{ route('admin.components.destroy', $c->id) }}"
-                                              onsubmit="return confirm('Xoá?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button class="border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-100 transition">
-                                                Xoá
-                                            </button>
-                                        </form>
-
-                                    </div>
-                                </td>
-
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="py-10 text-center text-slate-500">
-                                    Chưa có dữ liệu
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            {{-- Table Container (loaded via AJAX) --}}
+            <div id="components-table-container">
+                @include('pages.admin.components-table')
             </div>
-
-            @if(isset($components) && $components->hasPages())
-                <div class="mt-4">{{ $components->links() }}</div>
-            @endif
 
         </div>
 
@@ -172,20 +106,67 @@
 <script>
     const searchInput = document.getElementById('admin-component-search');
     const categoryFilter = document.getElementById('admin-category-filter');
-    const rows = document.querySelectorAll('#admin-components-table tr[data-name]');
+    const tableContainer = document.getElementById('components-table-container');
 
-    function filterTable() {
-        const q = searchInput.value.toLowerCase();
-        const cat = categoryFilter.value.toLowerCase();
+    // Load table via AJAX
+    async function loadTable(url) {
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const html = await response.text();
+            tableContainer.innerHTML = html;
+            // Reattach event listeners for new pagination links
+            attachPaginationListeners();
+        } catch (error) {
+            console.error('Error loading table:', error);
+        }
+    }
 
-        rows.forEach(row => {
-            const nameMatch = row.dataset.name.includes(q);
-            const catMatch = !cat || row.dataset.category.includes(cat);
-            row.style.display = nameMatch && catMatch ? '' : 'none';
+    // Attach listeners to pagination links
+    function attachPaginationListeners() {
+        document.querySelectorAll('#components-table-container nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const url = new URL(this.href);
+                // Keep category param
+                const category = categoryFilter.value;
+                if (category) {
+                    url.searchParams.set('category', category);
+                } else {
+                    url.searchParams.delete('category');
+                }
+                history.pushState(null, '', url.toString());
+                loadTable(url.toString().replace(window.location.origin, ''));
+            });
         });
     }
 
-    searchInput?.addEventListener('input', filterTable);
-    categoryFilter?.addEventListener('change', filterTable);
+    // Client-side search
+    searchInput?.addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        document.querySelectorAll('#admin-components-table tr[data-name]').forEach(row => {
+            const nameMatch = row.dataset.name.includes(q);
+            row.style.display = nameMatch ? '' : 'none';
+        });
+    });
+
+    // Server-side category filter
+    categoryFilter?.addEventListener('change', function() {
+        const url = new URL(window.location);
+        if (this.value) {
+            url.searchParams.set('category', this.value);
+        } else {
+            url.searchParams.delete('category');
+        }
+        url.searchParams.delete('page');
+        history.pushState(null, '', url.toString());
+        loadTable('{{ route("admin.components.table") }}' + url.search);
+    });
+
+    // Attach initial pagination listeners
+    attachPaginationListeners();
 </script>
 @endsection

@@ -63,7 +63,7 @@ class DashboardController extends Controller
         ];
 
         // Danh sách linh kiện kèm type_name, giá thấp nhất từ component_prices
-        $components = DB::table('components')
+        $query = DB::table('components')
             ->join('component_types', 'components.type_id', '=', 'component_types.id')
             ->leftJoin(DB::raw('(SELECT component_id, MIN(price) as min_price FROM component_prices GROUP BY component_id) cp'), 'components.id', '=', 'cp.component_id')
             ->select(
@@ -71,12 +71,22 @@ class DashboardController extends Controller
                 'components.name',
                 'component_types.type_name as category',
                 DB::raw('COALESCE(cp.min_price, components.base_price) as price')
-            )
+            );
+
+        // Filter by category if provided
+        $selectedCategory = request()->query('category');
+        if ($selectedCategory) {
+            $query->where('component_types.type_name', '=', $selectedCategory);
+        }
+
+        $components = $query
             ->orderBy('component_types.type_name')
             ->orderBy('components.name')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString()
+            ->fragment('admin-components-table');
 
-        return view('pages.admin.dashboard', compact('stats', 'components'));
+        return view('pages.admin.dashboard', compact('stats', 'components', 'selectedCategory'));
     }
 
     private function userDashboard()
@@ -101,5 +111,33 @@ class DashboardController extends Controller
             ->get();
 
         return view('pages.user.dashboard', compact('userStats', 'recentBuilds', 'recentPosts'));
+    }
+
+    public function getComponentsTable()
+    {
+        // Danh sách linh kiện kèm type_name, giá thấp nhất từ component_prices
+        $query = DB::table('components')
+            ->join('component_types', 'components.type_id', '=', 'component_types.id')
+            ->leftJoin(DB::raw('(SELECT component_id, MIN(price) as min_price FROM component_prices GROUP BY component_id) cp'), 'components.id', '=', 'cp.component_id')
+            ->select(
+                'components.id',
+                'components.name',
+                'component_types.type_name as category',
+                DB::raw('COALESCE(cp.min_price, components.base_price) as price')
+            );
+
+        // Filter by category if provided
+        $selectedCategory = request()->query('category');
+        if ($selectedCategory) {
+            $query->where('component_types.type_name', '=', $selectedCategory);
+        }
+
+        $components = $query
+            ->orderBy('component_types.type_name')
+            ->orderBy('components.name')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('pages.admin.components-table', compact('components', 'selectedCategory'));
     }
 }

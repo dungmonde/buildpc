@@ -65,4 +65,10 @@ class Component extends Model
     {
         return $this->hasOne(Cases::class, 'component_id');
     }
+
+    public function builds()
+    {
+        return $this->belongsToMany(PcBuild::class, 'build_components', 'component_id', 'build_id')
+                    ->withPivot('quantity');
+    }
 }

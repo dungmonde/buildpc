@@ -8,7 +8,20 @@
     </a>
 
     <div class="p-10 mb-10 bg-white">
-        <h1 class="text-3xl font-bold text-slate-900 mb-6">{{ $post->title }}</h1>
+        <div class="flex items-start justify-between gap-8 mb-6">
+            <h1 class="text-3xl font-bold text-slate-900 flex-1">{{ $post->title }}</h1>
+            {{-- Delete button for post owner --}}
+            @if(auth()->check() && auth()->id() === $post->user_id)
+            <form method="POST" action="{{ route('forum.destroy', $post->id) }}" 
+                  onsubmit="return confirm('Bạn chắc chắn muốn xóa bài viết này?')" class="inline">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="text-slate-400 hover:text-red-500 transition text-2xl font-bold flex-none" title="Xóa bài viết">
+                    ✕
+                </button>
+            </form>
+            @endif
+        </div>
 
         <div class="flex items-center gap-4 mb-10">
             <div class="flex-none">

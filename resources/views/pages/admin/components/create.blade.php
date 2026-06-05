@@ -37,7 +37,7 @@
                 <div>
                     <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Danh mục *</label>
                     <select name="type_id" required
-                        class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm">
+                        class="w-full bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm">
                         <option value="">-- Chọn danh mục --</option>
                         @foreach($categories as $id => $cat)
                             <option value="{{ $id }}" {{ old('type_id') == $id ? 'selected' : '' }}>{{ $cat }}</option>
@@ -53,7 +53,7 @@
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá (VNĐ) *</label>
-                <input type="number" name="price" value="{{ old('price') }}" min="0" step="1000"
+                <input type="number" name="base_price" value="{{ old('base_price') }}" min="0" step="1000"
                     class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm"
                     required>
             </div>

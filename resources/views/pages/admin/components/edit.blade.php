@@ -37,7 +37,7 @@
                 <div>
                     <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Danh mục *</label>
                     <select name="type_id" required
-                        class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm">
+                        class="w-full bg-white border border-slate-200 rounded-2xl px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm">
                         @foreach($categories as $id => $cat)
                             <option value="{{ $id }}" {{ old('type_id', $component->type_id) == $id ? 'selected' : '' }}>{{ $cat }}</option>
                         @endforeach
@@ -51,29 +51,23 @@
             </div>
 
             <div>
+                <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá (VNĐ)</label>
+                <input type="number" name="base_price" value="{{ old('base_price', $component->price ?? 0) }}" min="0" step="1000"
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm">
+            </div>
+
+            <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Thông số kỹ thuật</label>
                 <textarea name="specs" rows="4"
                     class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm resize-none">{{ old('specs', $component->specs ?? '') }}</textarea>
             </div>
 
-            {{-- Giá hiện tại (chỉ hiển thị, không sửa ở đây) --}}
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Ảnh linh kiện</label>
                 <input type="file" name="image"
                     class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm"
                     accept="image/jpeg,image/jpg">
                 <p class="text-xs text-slate-500 mt-2">Nếu thay đổi danh mục, ảnh sẽ được chuyển sang thư mục tương ứng.</p>
-            </div>
-
-            <div class="bg-slate-100 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Giá hiện tại</p>
-                   <p class="text-lg font-bold text-slate-900 mt-0.5">{{ number_format($component->price ?? 0, 0, ',', '.') }}₫</p>
-                </div>
-                <a href="{{ route('admin.components.price', $component->id) }}"
-                   class="bg-green-600/20 hover:bg-green-600/40 border border-green-500/30 text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-                    Cập nhật giá →
-                </a>
             </div>
 
             <div class="flex gap-3 pt-2">

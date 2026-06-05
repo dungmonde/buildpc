@@ -66,9 +66,10 @@ class AdminComponentController extends Controller
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
-            'name'    => 'required|string|max:255',
-            'type_id' => 'required|integer|exists:component_types,id',
-            'image'   => 'nullable|image|mimes:jpg,jpeg|max:5120',
+            'name'       => 'required|string|max:255',
+            'type_id'    => 'required|integer|exists:component_types,id',
+            'base_price' => 'nullable|numeric|min:0',
+            'image'      => 'nullable|image|mimes:jpg,jpeg|max:5120',
         ]);
 
         $component = DB::table('components')->where('id', $id)->first();
@@ -93,10 +94,16 @@ class AdminComponentController extends Controller
             }
         }
 
-        DB::table('components')->where('id', $id)->update([
+        $updateData = [
             'name'    => $validated['name'],
             'type_id' => $validated['type_id'],
-        ]);
+        ];
+
+        if (!empty($validated['base_price'])) {
+            $updateData['base_price'] = $validated['base_price'];
+        }
+
+        DB::table('components')->where('id', $id)->update($updateData);
 
         if ($request->hasFile('image')) {
             $typeName = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');

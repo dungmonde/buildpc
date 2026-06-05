@@ -17,9 +17,16 @@ class BuildController extends Controller
             'storage'     => 'Ổ cứng (SSD/HDD)',
             'psu'         => 'Nguồn máy tính (PSU)',
             'case'        => 'Vỏ máy tính (Case)',
+            'cooler'      => 'Tản nhiệt (Cooler)',
         ];
 
         $currentSlot = session()->get('build_slot', 1);
+        
+        // If this is a fresh session (no builds loaded yet), load from database
+        if (auth()->check() && empty(session()->get('build_pc_slots'))) {
+            $this->loadBuildsFromDatabase();
+        }
+
         $slots = session()->get('build_pc_slots', []);
 
         // If the active slot has stored data, load it into the working session key
@@ -35,6 +42,93 @@ class BuildController extends Controller
         }
 
         return view('pages.builder.manual', compact('categories', 'selected', 'totalPrice', 'currentSlot'));
+    }
+
+    private function loadBuildsFromDatabase()
+    {
+        if (!auth()->check()) {
+            return;
+        }
+
+        $user = auth()->user();
+        
+        // Load user's builds from database, limit to 10
+        $builds = \App\Models\PcBuild::where('user_id', $user->id)
+            ->with('components')
+            ->orderBy('id')
+            ->limit(10)
+            ->get();
+
+        $slots = [];
+        $slotBuildIds = [];
+
+        foreach ($builds as $index => $build) {
+            $slot = $index + 1; // Slots are 1-indexed
+
+            // Convert database build to session format
+            $buildData = [];
+            
+            // Get components from pivot table directly as fallback
+            $componentIds = \Illuminate\Support\Facades\DB::table('build_components')
+                ->where('build_id', $build->id)
+                ->pluck('component_id')
+                ->toArray();
+
+            if (!empty($componentIds)) {
+                $components = \App\Models\Component::whereIn('id', $componentIds)->get();
+            } else {
+                // Try eager-loaded relationship if pivot query returns nothing
+                $components = $build->components;
+            }
+            
+            foreach ($components as $component) {
+                $category = $this->getComponentCategory($component->type_id);
+                if ($category) {
+                    // Get the actual price from component_prices or base_price
+                    $price = \Illuminate\Support\Facades\DB::table('component_prices')
+                        ->where('component_id', $component->id)
+                        ->orderBy('price')
+                        ->value('price');
+                    
+                    if (!$price) {
+                        $price = $component->base_price ?? 0;
+                    }
+
+                    $buildData[$category] = [
+                        'id'    => $component->id,
+                        'name'  => $component->name,
+                        'price' => $price,
+                        'image' => null,
+                    ];
+                }
+            }
+
+            // Always add slot to session, preserving slot structure
+            $slots[$slot] = $buildData;
+            $slotBuildIds[$slot] = $build->id;
+        }
+
+        // Store in session
+        if (!empty($slotBuildIds)) {
+            session()->put('build_pc_slots', $slots);
+            session()->put('build_slot_ids', $slotBuildIds);
+        }
+    }
+
+    private function getComponentCategory($typeId): ?string
+    {
+        $typeMap = [
+            1 => 'cpu',      // CPU
+            2 => 'vga',      // Video Card
+            3 => 'ram',      // Memory
+            4 => 'storage',  // Internal Hard Drive
+            5 => 'mainboard',// Motherboard
+            6 => 'psu',      // Power Supply
+            7 => 'cooler',   // CPU Cooler
+            8 => 'case',     // Cases
+        ];
+
+        return $typeMap[$typeId] ?? null;
     }
 
     public function switchSlot($slot)
@@ -202,7 +296,8 @@ class BuildController extends Controller
         $slot = session()->get('build_slot', 1);
 
         if (empty($data)) {
-            return redirect()->route('build.index');
+            return redirect()->route('build.index')
+                ->with('error', 'Vui lòng chọn ít nhất một linh kiện.');
         }
 
         if (!auth()->check()) {
@@ -211,8 +306,19 @@ class BuildController extends Controller
 
         $user = auth()->user();
 
-        // Determine if there's an existing build id for this slot in session
+        // Check if user has reached the 10 build limit (only for new builds)
         $slotBuildIds = session()->get('build_slot_ids', []);
+        $isNewBuild = !isset($slotBuildIds[$slot]);
+
+        if ($isNewBuild) {
+            $existingBuildCount = \App\Models\PcBuild::where('user_id', $user->id)->count();
+            if ($existingBuildCount >= 10) {
+                return redirect()->route('build.index')
+                    ->with('error', 'Bạn đã đạt giới hạn 10 cấu hình. Vui lòng xóa một cấu hình cũ để tiếp tục.');
+            }
+        }
+
+        // Determine if there's an existing build id for this slot in session
         $buildId = $slotBuildIds[$slot] ?? null;
 
         if ($buildId) {
@@ -251,12 +357,59 @@ class BuildController extends Controller
         session()->put('build_pc_slots', $slots);
 
         return redirect()->route('build.index')
-            ->with('success', 'Lưu thành công');
+            ->with('success', 'Lưu cấu hình thành công');
     }
 
     public function reset()
     {
         session()->forget('build_pc');
         return redirect()->route('build.index');
+    }
+
+    public function deleteBuild($slot)
+    {
+        $slot = (int) $slot;
+        if ($slot < 1 || $slot > 10) {
+            abort(404);
+        }
+
+        if (!auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        $slotBuildIds = session()->get('build_slot_ids', []);
+        $buildId = $slotBuildIds[$slot] ?? null;
+
+        if (!$buildId) {
+            return redirect()->route('build.index')
+                ->with('error', 'Không tìm thấy cấu hình này.');
+        }
+
+        $pcBuild = \App\Models\PcBuild::find($buildId);
+        
+        if (!$pcBuild || $pcBuild->user_id !== auth()->id()) {
+            abort(403, 'Bạn không có quyền xóa cấu hình này.');
+        }
+
+        // Delete the build and its components
+        $pcBuild->components()->detach();
+        $pcBuild->delete();
+
+        // Remove from session
+        unset($slotBuildIds[$slot]);
+        session()->put('build_slot_ids', $slotBuildIds);
+
+        $slots = session()->get('build_pc_slots', []);
+        unset($slots[$slot]);
+        session()->put('build_pc_slots', $slots);
+
+        // If we deleted the active slot, switch to slot 1
+        if (session()->get('build_slot') == $slot) {
+            session()->put('build_slot', 1);
+            session()->forget('build_pc');
+        }
+
+        return redirect()->route('build.index')
+            ->with('success', 'Xóa cấu hình thành công');
     }
 }

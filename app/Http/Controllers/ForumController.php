@@ -85,4 +85,26 @@ class ForumController extends Controller
         return redirect()->route('forum.show', $postId)
                          ->with('success', 'Bình luận đã được đăng!');
     }
+
+    /**
+     * Xóa bài viết
+     */
+    public function destroy($id)
+    {
+        $post = Post::findOrFail($id);
+
+        // Kiểm tra quyền xóa
+        if ($post->user_id !== Auth::id()) {
+            abort(403, 'Bạn không có quyền xóa bài viết này.');
+        }
+
+        // Xóa tất cả comment của bài viết
+        Comment::where('post_id', $id)->delete();
+
+        // Xóa bài viết
+        $post->delete();
+
+        return redirect()->route('forum.index')
+                         ->with('success', 'Bài viết đã được xóa!');
+    }
 }

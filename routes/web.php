@@ -75,6 +75,10 @@ Route::prefix('build-pc')->name('build.')->group(function () {
 
     Route::post('/save', [BuildController::class, 'save'])->name('save');
     Route::get('/slot/{slot}', [BuildController::class, 'switchSlot'])->name('slot');
+
+    Route::middleware(['auth'])->group(function () {
+        Route::delete('/delete/{slot}', [BuildController::class, 'deleteBuild'])->name('delete');
+    });
 });
 
 // Diễn đàn
@@ -84,6 +88,7 @@ Route::get('/forum/post/{id}', [ForumController::class, 'show'])->name('forum.sh
 Route::middleware(['auth'])->group(function () {
     Route::get('/forum/create', [ForumController::class, 'create'])->name('forum.create');
     Route::post('/forum/store', [ForumController::class, 'store'])->name('forum.store');
+    Route::delete('/forum/post/{id}', [ForumController::class, 'destroy'])->name('forum.destroy');
 });
 
 
@@ -102,6 +107,10 @@ Route::post('/forum/post/{id}/comment', [ForumController::class, 'storeComment']
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware('auth')
     ->name('dashboard');
+
+Route::get('/admin/components-table', [DashboardController::class, 'getComponentsTable'])
+    ->middleware(['auth', 'admin'])
+    ->name('admin.components.table');
 
 Route::get('/linh-kien', [ComponentController::class, 'all'])->name('components.all');
  
