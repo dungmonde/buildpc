@@ -28,7 +28,7 @@
                 <div class="flex flex-wrap gap-2">
                     @foreach([5, 10, 15, 20, 30, 40, 50] as $mil)
                     <button type="button"
-                            onclick="document.getElementById('budgetInput').value = {{ $mil * 1000000 }}"
+                            data-budget="{{ $mil * 1000000 }}"
                             class="text-xs rounded-full bg-white ring-1 ring-slate-200 text-slate-700 px-3 py-1.5 hover:shadow-sm hover:text-indigo-600 transition">
                         {{ $mil }} Triệu
                     </button>
@@ -155,4 +155,11 @@
     @endisset
 
 </div>
+<script>
+    document.querySelectorAll('[data-budget]').forEach((button) => {
+        button.addEventListener('click', () => {
+            document.getElementById('budgetInput').value = button.dataset.budget;
+        });
+    });
+</script>
 @endsection
