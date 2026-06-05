@@ -28,7 +28,7 @@ class AdminComponentController extends Controller
             'name'       => 'required|string|max:255',
             'type_id'    => 'required|integer|exists:component_types,id',
             'base_price' => 'required|numeric|min:0',
-            'image'      => 'nullable|image|mimes:jpg,jpeg|max:5120',
+            'image'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $componentId = DB::table('components')->insertGetId([
@@ -36,6 +36,8 @@ class AdminComponentController extends Controller
             'type_id'    => $validated['type_id'],
             'base_price' => $validated['base_price'],
         ]);
+
+        $this->syncComponentPrice($componentId, $validated['base_price']);
 
         if ($request->hasFile('image')) {
             $typeName = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');
@@ -69,7 +71,7 @@ class AdminComponentController extends Controller
             'name'       => 'required|string|max:255',
             'type_id'    => 'required|integer|exists:component_types,id',
             'base_price' => 'nullable|numeric|min:0',
-            'image'      => 'nullable|image|mimes:jpg,jpeg|max:5120',
+            'image'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $component = DB::table('components')->where('id', $id)->first();
@@ -99,11 +101,15 @@ class AdminComponentController extends Controller
             'type_id' => $validated['type_id'],
         ];
 
-        if (!empty($validated['base_price'])) {
+        if ($request->has('base_price') && $validated['base_price'] !== null) {
             $updateData['base_price'] = $validated['base_price'];
         }
 
         DB::table('components')->where('id', $id)->update($updateData);
+
+        if (array_key_exists('base_price', $updateData)) {
+            $this->syncComponentPrice($id, $updateData['base_price']);
+        }
 
         if ($request->hasFile('image')) {
             $typeName = DB::table('component_types')->where('id', $validated['type_id'])->value('type_name');
@@ -120,6 +126,32 @@ class AdminComponentController extends Controller
         $folder = public_path('images/components/' . $categorySlug);
         if (!is_dir($folder)) {
             mkdir($folder, 0755, true);
+        }
+
+        $target = $folder . DIRECTORY_SEPARATOR . $componentId . '.jpg';
+
+        if (function_exists('imagejpeg')) {
+            $source = match ($image->getMimeType()) {
+                'image/jpeg' => imagecreatefromjpeg($image->getRealPath()),
+                'image/png'  => function_exists('imagecreatefrompng') ? imagecreatefrompng($image->getRealPath()) : false,
+                'image/webp' => function_exists('imagecreatefromwebp') ? imagecreatefromwebp($image->getRealPath()) : false,
+                default      => false,
+            };
+
+            if ($source !== false) {
+                $width = imagesx($source);
+                $height = imagesy($source);
+                $canvas = imagecreatetruecolor($width, $height);
+
+                $white = imagecolorallocate($canvas, 255, 255, 255);
+                imagefilledrectangle($canvas, 0, 0, $width, $height, $white);
+                imagecopy($canvas, $source, 0, 0, 0, 0, $width, $height);
+                imagejpeg($canvas, $target, 90);
+
+                imagedestroy($canvas);
+                imagedestroy($source);
+                return;
+            }
         }
 
         $image->move($folder, $componentId . '.jpg');
@@ -182,7 +214,37 @@ class AdminComponentController extends Controller
             'base_price' => $validated['price'],
         ]);
 
+        $this->syncComponentPrice($id, $validated['price']);
+
         return redirect()->route('dashboard')
             ->with('success', 'Cập nhật giá thành công!');
+    }
+
+    private function syncComponentPrice($componentId, $price): void
+    {
+        $priceRowId = DB::table('component_prices')
+            ->where('component_id', $componentId)
+            ->orderBy('price')
+            ->value('id');
+
+        if ($priceRowId) {
+            DB::table('component_prices')->where('id', $priceRowId)->update([
+                'price' => $price,
+                'updated_at' => now(),
+            ]);
+            return;
+        }
+
+        $dealerId = DB::table('dealers')->orderBy('id')->value('id');
+        if (!$dealerId) {
+            return;
+        }
+
+        DB::table('component_prices')->insert([
+            'component_id' => $componentId,
+            'dealer_id' => $dealerId,
+            'price' => $price,
+            'updated_at' => now(),
+        ]);
     }
 }

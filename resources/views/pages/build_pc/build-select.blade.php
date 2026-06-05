@@ -29,7 +29,7 @@ $imgMap = [
                             {{ $item->name }}
                         </h3>
                         <p class="text-3xl font-bold text-primary-600 mt-4">
-                            {{ number_format($item->cheapestPrice?->price ?? 0) }} ₫
+                            {{ number_format($item->base_price ?? $item->cheapestPrice?->price ?? 0) }} ₫
                         </p>
                     </div>
                 </div>

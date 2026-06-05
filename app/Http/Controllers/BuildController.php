@@ -84,14 +84,12 @@ class BuildController extends Controller
             foreach ($components as $component) {
                 $category = $this->getComponentCategory($component->type_id);
                 if ($category) {
-                    // Get the actual price from component_prices or base_price
-                    $price = \Illuminate\Support\Facades\DB::table('component_prices')
-                        ->where('component_id', $component->id)
-                        ->orderBy('price')
-                        ->value('price');
-                    
-                    if (!$price) {
-                        $price = $component->base_price ?? 0;
+                    $price = $component->base_price;
+                    if ($price === null) {
+                        $price = \Illuminate\Support\Facades\DB::table('component_prices')
+                            ->where('component_id', $component->id)
+                            ->orderBy('price')
+                            ->value('price') ?? 0;
                     }
 
                     $buildData[$category] = [
@@ -198,7 +196,7 @@ class BuildController extends Controller
         $build[$category] = [
             'id'    => $component->id,
             'name'  => $component->name,
-            'price' => $component->cheapestPrice?->price ?? 0,
+            'price' => $component->base_price ?? $component->cheapestPrice?->price ?? 0,
             'image' => $component->image_url ?? null,
         ];
 
@@ -253,7 +251,7 @@ class BuildController extends Controller
             return [
                 'id'    => $component->id,
                 'name'  => $component->name,
-                'price' => $component->cheapestPrice?->price ?? 0,
+                'price' => $component->base_price ?? $component->cheapestPrice?->price ?? 0,
                 'image' => $component->image_url ?? null,
             ];
         }

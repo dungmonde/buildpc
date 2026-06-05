@@ -70,7 +70,7 @@ class DashboardController extends Controller
                 'components.id',
                 'components.name',
                 'component_types.type_name as category',
-                DB::raw('COALESCE(cp.min_price, components.base_price) as price')
+                DB::raw('COALESCE(components.base_price, cp.min_price) as price')
             );
 
         // Filter by category if provided
@@ -123,7 +123,7 @@ class DashboardController extends Controller
                 'components.id',
                 'components.name',
                 'component_types.type_name as category',
-                DB::raw('COALESCE(cp.min_price, components.base_price) as price')
+                DB::raw('COALESCE(components.base_price, cp.min_price) as price')
             );
 
         // Filter by category if provided

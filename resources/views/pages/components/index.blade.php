@@ -219,7 +219,7 @@ $buildCategoryMap = [
                         'pcCase'      => $item->pcCase,   // ← đổi 'case' thành 'pcCase'
                         default       => null,
                     };
-                    $price = $item->cheapestPrice?->price;
+                    $price = $item->base_price ?? $item->cheapestPrice?->price;
                     $icons = [
                         'cpu' => '🔲', 'gpu' => '🎮', 'ram' => '📏',
                         'storage' => '💾', 'motherboard' => '🟫',

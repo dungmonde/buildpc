@@ -87,8 +87,11 @@ class ComponentController extends Controller
             if (count($range) == 2) {
                 $min = (int)$range[0];
                 $max = (int)$range[1];
-                $query->whereHas('prices', function($q) use ($min, $max) {
-                    $q->whereBetween('price', [$min, $max]);
+                $query->where(function($q) use ($min, $max) {
+                    $q->whereBetween('base_price', [$min, $max])
+                        ->orWhereHas('prices', function($priceQuery) use ($min, $max) {
+                            $priceQuery->whereBetween('price', [$min, $max]);
+                        });
                 });
             }
         }
@@ -105,17 +108,14 @@ class ComponentController extends Controller
 
         // 4. Sắp xếp
         if ($request->filled('sort')) {
-            $priceSubquery = ComponentPrice::select('price')
-                ->whereColumn('component_id', 'components.id')
-                ->orderBy('price', 'asc')
-                ->limit(1);
+            $effectivePrice = 'COALESCE(components.base_price, (SELECT MIN(price) FROM component_prices WHERE component_prices.component_id = components.id))';
 
             switch ($request->sort) {
                 case 'price_asc':
-                    $query->orderBy($priceSubquery, 'asc');
+                    $query->orderByRaw($effectivePrice . ' is null, ' . $effectivePrice . ' asc');
                     break;
                 case 'price_desc':
-                    $query->orderBy($priceSubquery, 'desc');
+                    $query->orderByRaw($effectivePrice . ' is null, ' . $effectivePrice . ' desc');
                     break;
                 case 'name_asc':
                     $query->orderBy('name', 'asc');

@@ -107,6 +107,18 @@
     const searchInput = document.getElementById('admin-component-search');
     const categoryFilter = document.getElementById('admin-category-filter');
     const tableContainer = document.getElementById('components-table-container');
+    const tableRoute = '{{ route("admin.components.table") }}';
+
+    function buildTableUrl(params) {
+        const url = new URL(tableRoute, window.location.origin);
+        params.forEach((value, key) => {
+            if (value) {
+                url.searchParams.set(key, value);
+            }
+        });
+
+        return url;
+    }
 
     // Load table via AJAX
     async function loadTable(url) {
@@ -131,15 +143,19 @@
             link.addEventListener('click', function(e) {
                 e.preventDefault();
                 const url = new URL(this.href);
-                // Keep category param
                 const category = categoryFilter.value;
                 if (category) {
                     url.searchParams.set('category', category);
                 } else {
                     url.searchParams.delete('category');
                 }
-                history.pushState(null, '', url.toString());
-                loadTable(url.toString().replace(window.location.origin, ''));
+
+                const dashboardUrl = new URL(window.location);
+                dashboardUrl.search = url.search;
+                history.pushState(null, '', dashboardUrl.toString());
+
+                const tableUrl = buildTableUrl(url.searchParams);
+                loadTable(tableUrl.pathname + tableUrl.search);
             });
         });
     }
@@ -155,15 +171,17 @@
 
     // Server-side category filter
     categoryFilter?.addEventListener('change', function() {
-        const url = new URL(window.location);
+        const params = new URLSearchParams();
         if (this.value) {
-            url.searchParams.set('category', this.value);
-        } else {
-            url.searchParams.delete('category');
+            params.set('category', this.value);
         }
-        url.searchParams.delete('page');
-        history.pushState(null, '', url.toString());
-        loadTable('{{ route("admin.components.table") }}' + url.search);
+
+        const dashboardUrl = new URL(window.location);
+        dashboardUrl.search = params.toString();
+        history.pushState(null, '', dashboardUrl.toString());
+
+        const tableUrl = buildTableUrl(params);
+        loadTable(tableUrl.pathname + tableUrl.search);
     });
 
     // Attach initial pagination listeners

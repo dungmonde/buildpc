@@ -52,7 +52,7 @@
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá (VNĐ)</label>
-                <input type="number" name="base_price" value="{{ old('base_price', $component->price ?? 0) }}" min="0" step="1000"
+                <input type="number" name="base_price" value="{{ old('base_price', $component->base_price ?? 0) }}" min="0" step="1000"
                     class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm">
             </div>
 
@@ -66,8 +66,8 @@
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Ảnh linh kiện</label>
                 <input type="file" name="image"
                     class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 focus:outline-none focus:border-slate-400 text-sm"
-                    accept="image/jpeg,image/jpg">
-                <p class="text-xs text-slate-500 mt-2">Nếu thay đổi danh mục, ảnh sẽ được chuyển sang thư mục tương ứng.</p>
+                    accept="image/jpeg,image/jpg,image/png,image/webp">
+                <p class="text-xs text-slate-500 mt-2">Hỗ trợ JPG, PNG, WebP. Nếu thay đổi danh mục, ảnh sẽ được chuyển sang thư mục tương ứng.</p>
             </div>
 
             <div class="flex gap-3 pt-2">

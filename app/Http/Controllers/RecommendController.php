@@ -96,16 +96,18 @@ class RecommendController extends Controller
 
     private function pickBestComponent(int $typeId, float $maxPrice, string $specTable, string $usage, string $priority): ?object
     {
+        $effectivePrice = 'COALESCE(components.base_price, cp.price)';
+
         $query = DB::table('components')
             ->join($specTable, $specTable . '.component_id', '=', 'components.id')
-            ->join(
+            ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', $typeId)
-            ->where('cp.price', '<=', $maxPrice)
-            ->where('cp.price', '>', 0)
-            ->select('components.id', 'components.name', 'cp.price');
+            ->whereRaw($effectivePrice . ' <= ?', [$maxPrice])
+            ->whereRaw($effectivePrice . ' > 0')
+            ->select('components.id', 'components.name', DB::raw($effectivePrice . ' as price'));
 
         if ($specTable === 'cpus') {
             if (in_array($usage, ['render', 'streaming'])) {
@@ -129,7 +131,7 @@ class RecommendController extends Controller
             }
         }
 
-        $query->orderByDesc('cp.price');
+        $query->orderByDesc('price');
 
         return $query->first();
     }
@@ -219,12 +221,16 @@ class RecommendController extends Controller
             if (!$key) continue;
 
             $component = DB::table('components')
-                ->join(
+                ->leftJoin(
                     DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.id', $componentId)
-                ->select('components.id', 'components.name', 'cp.price')
+                ->select(
+                    'components.id',
+                    'components.name',
+                    DB::raw('COALESCE(components.base_price, cp.price) as price')
+                )
                 ->first();
 
             if ($component) {

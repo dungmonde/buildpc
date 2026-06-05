@@ -46,7 +46,7 @@ Route::get('/linh-kien/{type}/{id}', function ($type, $id) {
     $relation  = $map[$type];
     $component = Component::with([$relation, 'prices'])->findOrFail($id);
     $spec      = $component->$relation;
-    $price     = $component->prices->min('price');
+    $price     = $component->base_price ?? $component->prices->min('price');
 
     return view('pages.components.show', compact('component', 'spec', 'price', 'type'));
 })->name('components.show');

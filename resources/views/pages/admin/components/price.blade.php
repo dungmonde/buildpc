@@ -28,7 +28,7 @@
             {{-- Giá hiện tại --}}
             <div class="bg-slate-100 rounded-xl p-4 mb-6 text-center">
                 <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Giá hiện tại</p>
-                <p class="text-3xl font-bold text-slate-900">{{ number_format($component->price, 0, ',', '.') }}<span class="text-lg text-slate-500">₫</span></p>
+                <p class="text-3xl font-bold text-slate-900">{{ number_format($component->base_price ?? 0, 0, ',', '.') }}<span class="text-lg text-slate-500">₫</span></p>
             </div>
 
             <form action="{{ route('admin.components.update-price', $component->id) }}" method="POST" class="space-y-5">
@@ -38,6 +38,7 @@
                 <div>
                     <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá mới (VNĐ) *</label>
                     <input type="number" name="price" min="0" step="1000" autofocus
+                        value="{{ old('price', $component->base_price ?? 0) }}"
                         class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 text-slate-900 text-lg font-semibold placeholder-slate-400 focus:outline-none focus:border-slate-400"
                         placeholder="Nhập giá mới..." required>
                     <p class="text-xs text-gray-500 mt-1.5">Nhập số nguyên, đơn vị VNĐ. VD: 5990000</p>
