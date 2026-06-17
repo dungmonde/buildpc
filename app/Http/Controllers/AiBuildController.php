@@ -37,7 +37,7 @@ Quy tắc:
 3. Xử lý các yêu cầu lệch lệch/không thực tế:
    - Nếu ngân sách quá cao so với nhu cầu (ví dụ: 30-50 triệu cho văn phòng cơ bản), hãy tự động chuyển đổi build_type thành "workstation" để phân bổ thêm card đồ họa chuyên dụng và linh kiện cao cấp, đồng thời giải thích rõ trong explanation về sự nâng cấp này để tận dụng tối đa ngân sách và tránh lãng phí.
    - Nếu ngân sách quá thấp so với nhu cầu (ví dụ: 10 triệu chơi game AAA nặng), hãy chọn build_type phù hợp nhất và giải thích rõ trong explanation về giới hạn hiệu năng của cấu hình và khuyến nghị nâng cấp sau này.
-4. explanation bằng tiếng Việt, không nhắc tên linh kiện cụ thể.
+4. explanation phải viết bằng 100% tiếng Việt tự nhiên và chuẩn xác, không được pha trộn hoặc sử dụng bất kỳ từ ngữ hay ký tự nước ngoài nào khác (ví dụ: tiếng Hàn như "설정", tiếng Trung, tiếng Nhật,...), không nhắc tên linh kiện cụ thể.
 5. Chỉ trả về đúng 1 build.
 
 Format bắt buộc:
@@ -123,7 +123,7 @@ EOT;
                 'ram'       => 850000,
                 'storage'   => 800000,
                 'psu'       => 700000,
-                'case'      => 450000,
+                'case'      => 599000,
             ];
         } else {
             $alloc = [
@@ -141,7 +141,7 @@ EOT;
                 'ram'       => 700000,
                 'storage'   => 700000,
                 'psu'       => 550000,
-                'case'      => 350000,
+                'case'      => 599000,
                 'vga'       => 0,
             ];
         }
@@ -181,7 +181,8 @@ EOT;
 
         // ── 1. CPU ────────────────────────────────────────────────────────────
         $cpuMin = $needsGpu ? 1200000 : 0;
-        $cpuMax = min($alloc['cpu'], $remaining);
+        $reserve = $remainingFloors(['mainboard', 'ram', 'vga', 'storage', 'psu', 'case']);
+        $cpuMax = min($alloc['cpu'], $remaining - $reserve);
 
         // Subquery helper to make sure picked CPU has at least one matching motherboard in the DB
         $hasMb = function ($q) {
@@ -207,23 +208,21 @@ EOT;
         
         // 3. Fallback: Try with requested brand up to remaining budget (reserving other slots)
         if (!$cpu) {
-            $reserve = $remainingFloors(['mainboard', 'ram', 'vga', 'storage', 'psu', 'case']);
             $cpuLimit = max($cpuMax, $remaining - $reserve);
             $cpu = $this->pickByBudget(1, 'cpus', $cpuLimit, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb) {
                 if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
                 if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
                 $hasMb($q);
-            });
+            }, true);
         }
         
         // 4. Fallback: Try with any brand up to remaining budget (reserving other slots)
         if (!$cpu) {
-            $reserve = $remainingFloors(['mainboard', 'ram', 'vga', 'storage', 'psu', 'case']);
             $cpuLimit = max($cpuMax, $remaining - $reserve);
             $cpu = $this->pickByBudget(1, 'cpus', $cpuLimit, function ($q) use ($cpuMin, $ep, $hasMb) {
                 if ($cpuMin > 0) $q->whereRaw("{$ep} >= ?", [$cpuMin]);
                 $hasMb($q);
-            });
+            }, true);
         }
         
         // 5. Ultimate Fallback: Select the absolute cheapest compatible CPU in the database
@@ -265,7 +264,8 @@ EOT;
             // Budget CPU: exclude expensive/mid-range chipsets to prioritize cheaper ones
             $excludedChipsets = ['B550', 'X570', 'B650', 'X670', 'B660', 'B760', 'Z690', 'Z790', 'H770', 'Z890', 'B850', 'X870'];
         }
-        $mbMax = min($alloc['mainboard'], $remaining);
+        $reserve = $remainingFloors(['ram', 'vga', 'storage', 'psu', 'case']);
+        $mbMax = min($alloc['mainboard'], $remaining - $reserve);
         
         // 1. Try with chipset filter within mbMax
         $mb = $this->pickByBudget(5, 'motherboards', $mbMax, function ($q) use ($socket, $excludedChipsets) {
@@ -291,7 +291,7 @@ EOT;
                 foreach ($excludedChipsets as $chip) {
                     $q->where('components.name', 'NOT ILIKE', "%{$chip}%");
                 }
-            });
+            }, true);
         }
         
         // 4. Fallback: Skip chipset filter up to remaining budget (reserving other slots)
@@ -300,7 +300,7 @@ EOT;
             $mbLimit = max($mbMax, $remaining - $reserve);
             $mb = $this->pickByBudget(5, 'motherboards', $mbLimit, function ($q) use ($socket) {
                 $q->where('motherboards.socket', $socket);
-            });
+            }, true);
         }
         
         // 5. Ultimate Fallback: Select the absolute cheapest compatible motherboard in the database
@@ -330,7 +330,8 @@ EOT;
 
         // ── 3. RAM ────────────────────────────────────────────────────────────
         $ramCapacity = $needsGpu ? 16 : 8;
-        $ramMax      = min($alloc['ram'], $remaining);
+        $reserve = $remainingFloors(['vga', 'storage', 'psu', 'case']);
+        $ramMax      = min($alloc['ram'], $remaining - $reserve);
         
         // 1. Try with target capacity and DDR gen within ramMax
         $ram = $this->pickByBudget(3, 'memory', $ramMax, function ($q) use ($ramCapacity, $ddrGen) {
@@ -345,7 +346,7 @@ EOT;
             $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) use ($ramCapacity, $ddrGen) {
                 $q->where('memory.capacity', '>=', $ramCapacity);
                 if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-            });
+            }, true);
         }
         
         // 3. Fallback: Lower capacity to 8GB (for gaming) within ramMax
@@ -363,7 +364,7 @@ EOT;
             $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) use ($ddrGen) {
                 $q->where('memory.capacity', '>=', 8);
                 if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-            });
+            }, true);
         }
         
         // 5. Fallback: Lower capacity to 4GB up to remaining budget (reserving other slots), skipping DDR check if needed
@@ -372,7 +373,7 @@ EOT;
             $ramLimit = max($ramMax, $remaining - $reserve);
             $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) {
                 $q->where('memory.capacity', '>=', 4);
-            });
+            }, true);
         }
         
         // 6. Ultimate Fallback: Select the absolute cheapest compatible RAM in the database
@@ -399,7 +400,8 @@ EOT;
 
         // ── 4. VGA ────────────────────────────────────────────────────────────
         if ($needsGpu && $remaining > 1000000) {
-            $vgaMax = min($alloc['vga'], $remaining - 1950000);
+            $reserve = $remainingFloors(['storage', 'psu', 'case']);
+            $vgaMax = min($alloc['vga'], $remaining - $reserve);
             if ($vgaMax > 0) {
                 $vga = $this->pickByBudget(2, 'video_cards', $vgaMax);
                 if ($vga) {
@@ -418,7 +420,7 @@ EOT;
         if ($needsGpu && !isset($build['components']['vga']) && $remaining > 1950000) {
             $reserve = $remainingFloors(['storage', 'psu', 'case']);
             $vgaLimit = max(0.0, $remaining - $reserve);
-            $vga = $this->pickByBudget(2, 'video_cards', $vgaLimit);
+            $vga = $this->pickByBudget(2, 'video_cards', $vgaLimit, null, true);
             if ($vga) {
                 $price   = (float)$vga->price;
                 $vgaName = $vga->name . (!empty($vga->chipset) ? ' (' . $vga->chipset . ')' : '');
@@ -432,7 +434,8 @@ EOT;
 
         // ── 5. STORAGE ────────────────────────────────────────────────────────
         $storageMin = $needsGpu ? 256 : 120;
-        $storageMax = min($alloc['storage'], $remaining);
+        $reserve = $remainingFloors(['psu', 'case']);
+        $storageMax = min($alloc['storage'], $remaining - $reserve);
         
         // 1. Try SSD with standard capacity within storageMax
         $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageMax, function ($q) use ($storageMin) {
@@ -463,7 +466,7 @@ EOT;
             $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) use ($storageMin) {
                 $q->where('internal_hard_drives.capacity', '>=', $storageMin)
                   ->where('internal_hard_drives.type', 'SSD');
-            });
+            }, true);
         }
         
         // 5. Fallback: SSD lower capacity up to remaining budget (reserving other slots)
@@ -473,7 +476,7 @@ EOT;
             $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) {
                 $q->where('internal_hard_drives.capacity', '>=', 120)
                   ->where('internal_hard_drives.type', 'SSD');
-            });
+            }, true);
         }
         
         // 6. Fallback: HDD standard capacity within storageMax
@@ -489,14 +492,14 @@ EOT;
             $storageLimit = max($storageMax, $remaining - $reserve);
             $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) use ($storageMin) {
                 $q->where('internal_hard_drives.capacity', '>=', $storageMin);
-            });
+            }, true);
         }
         
         // 8. Fallback: Any storage up to remaining budget (reserving other slots)
         if (!$storage) {
             $reserve = $remainingFloors(['psu', 'case']);
             $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit);
+            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, null, true);
         }
         
         // 9. Ultimate Fallback: Select the absolute cheapest storage in the database
@@ -523,7 +526,8 @@ EOT;
 
         // ── 6. PSU ────────────────────────────────────────────────────────────
         $requiredWatt = $cpuTdp + $vgaTdp + 150;
-        $psuMax       = min($alloc['psu'], $remaining);
+        $reserve = $remainingFloors(['case']);
+        $psuMax       = min($alloc['psu'], $remaining - $reserve);
         $psu = $this->pickByBudget(6, 'power_supplies', $psuMax, function ($q) use ($requiredWatt) {
             $q->where('power_supplies.wattage', '>=', $requiredWatt);
         });
@@ -532,7 +536,7 @@ EOT;
             $psuLimit = max($psuMax, $remaining - $reserve);
             $psu = $this->pickByBudget(6, 'power_supplies', $psuLimit, function ($q) use ($requiredWatt) {
                 $q->where('power_supplies.wattage', '>=', $requiredWatt);
-            });
+            }, true);
         }
         
         // 3. Ultimate Fallback: Select the absolute cheapest PSU in the database
@@ -559,8 +563,8 @@ EOT;
 
         // ── 7. CASE ───────────────────────────────────────────────────────────
         $caseMax = min($alloc['case'], $remaining);
-        $case    = $this->pickCase($caseMax);
-        if (!$case) $case = $this->pickCase($remaining);
+        $case    = $this->pickByBudget(8, 'cases', $caseMax);
+        if (!$case) $case = $this->pickByBudget(8, 'cases', $remaining, null, true);
         
         // Ultimate Fallback: Select the absolute cheapest case in the database
         if (!$case) {
@@ -603,7 +607,7 @@ EOT;
     // ─────────────────────────────────────────────────────────────────────────
     // HELPER: Chọn linh kiện tốt nhất trong budget
     // ─────────────────────────────────────────────────────────────────────────
-    private function pickByBudget(int $typeId, string $specTable, float $maxBudget, ?\Closure $filter = null): ?object
+    private function pickByBudget(int $typeId, string $specTable, float $maxBudget, ?\Closure $filter = null, bool $asc = false): ?object
     {
         $ep          = 'COALESCE(components.base_price, cp.price)';
         $selectExtra = $specTable === 'video_cards' ? ['video_cards.chipset'] : [];
@@ -621,25 +625,16 @@ EOT;
 
         if ($filter) $filter($q);
 
-        return $q->orderByDesc('price')->first();
+        if ($asc) {
+            $q->orderBy('price');
+        } else {
+            $q->orderByDesc('price');
+        }
+
+        return $q->first();
     }
 
-    private function pickCase(float $maxBudget): ?object
-    {
-        $ep = 'COALESCE(components.base_price, cp.price)';
-        return \DB::table('components')
-            ->join('cases', 'cases.component_id', '=', 'components.id')
-            ->leftJoin(
-                \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                'cp.component_id', '=', 'components.id'
-            )
-            ->where('components.type_id', 8)
-            ->whereRaw("{$ep} > 0")
-            ->whereRaw("{$ep} <= ?", [$maxBudget])
-            ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
-            ->orderByDesc('price')
-            ->first();
-    }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     public function applyAiBuild(Request $request)
