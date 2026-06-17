@@ -37,12 +37,13 @@ Quy tắc:
    - "workstation": Cho nhu cầu làm việc chuyên nghiệp, đồ họa, thiết kế, dựng phim, biên tập/edit video, render 3D, lập trình, học máy, AI, photoshop, premiere, after effects, v.v. Bắt buộc phải chọn workstation cho mọi nhu cầu liên quan đến edit video, dựng hình, đồ họa hay thiết kế.
    - "office": Cho các nhu cầu văn phòng thông thường, kế toán, học tập cơ bản, lướt web, xem phim, sử dụng Office (Word, Excel, v.v.).
 2. cpu_brand chỉ được là: "intel", "amd", "any".
-3. Xử lý các yêu cầu lệch lệch/không thực tế:
-   - Nếu ngân sách quá cao so với nhu cầu (ví dụ: 30-50 triệu cho văn phòng cơ bản), hãy tự động chuyển đổi build_type thành "workstation" để phân bổ thêm card đồ họa chuyên dụng và linh kiện cao cấp, đồng thời giải thích rõ trong explanation về sự nâng cấp này để tận dụng tối đa ngân sách và tránh lãng phí.
-   - Nếu ngân sách quá thấp so với nhu cầu (ví dụ: 10 triệu chơi game AAA nặng), hãy chọn build_type phù hợp nhất và giải thích rõ trong explanation về giới hạn hiệu năng của cấu hình và khuyến nghị nâng cấp sau này.
+3. Xử lý các yêu cầu lệch/không thực tế:
+   - Chỉ xem là ngân sách quá cao đối với nhu cầu văn phòng thông thường nếu ngân sách lớn (từ 15 triệu trở lên). Khi đó hãy tự động chuyển đổi thành cấu hình có card đồ họa rời để hỗ trợ tốt hơn và giải thích tự nhiên. Đối với nhu cầu chơi game hoặc làm đồ họa, KHÔNG bao giờ coi ngân sách cao là dư thừa vì các nhu cầu này luôn đòi hỏi cấu hình càng mạnh càng tốt để đạt hiệu năng tối đa.
+   - Nếu ngân sách quá thấp so với nhu cầu (ví dụ: dưới 10 triệu cho chơi game nặng hoặc đồ họa phức tạp), hãy giải thích nhẹ nhàng về giới hạn hiệu năng của cấu hình và khuyến nghị nâng cấp sau này.
 4. Yêu cầu về phần diễn giải (explanation):
-   - Phải viết bằng 100% tiếng Việt tự nhiên, thuần túy và chuẩn xác. TUYỆT ĐỐI KHÔNG được pha trộn hoặc sử dụng bất kỳ từ ngữ, ký tự hay chữ viết nước ngoài nào khác (ví dụ: không dùng chữ Hán/tiếng Trung như "快速", tiếng Hàn như "설정", tiếng Nhật,...). Mọi câu từ, đặc biệt là các cụm từ ở cuối câu, phải kết thúc hoàn toàn bằng tiếng Việt tự nhiên (ví dụ dùng "nhanh chóng", "mượt mà"). Không nhắc tên linh kiện cụ thể.
-   - Khi giải thích cho cấu hình "workstation" (làm việc đồ họa, dựng video, lập trình...), hãy diễn giải dưới góc độ tối ưu hóa phần cứng thực tế phục vụ cho công việc (ví dụ: cần hiệu năng CPU đa nhân để xử lý và render nhanh hơn, card đồ họa rời để tăng tốc độ dựng hình/mã hóa video, dung lượng RAM lớn để phục vụ các dự án đa nhiệm mượt mà). KHÔNG ĐƯỢC dùng các từ sáo rỗng dễ gây hiểu nhầm như "workstation chuyên nghiệp" hay "máy trạm chuyên nghiệp", thay vào đó hãy tập trung vào tính chuyên dụng của phần cứng cho đồ họa/dựng phim.
+   - Phải viết bằng 100% tiếng Việt tự nhiên, thuần túy và chuẩn xác. TUYỆT ĐỐI KHÔNG được pha trộn hoặc sử dụng bất kỳ từ ngữ, ký tự hay chữ viết nước ngoài nào khác (ví dụ: không dùng chữ Hán/tiếng Trung như "快速", tiếng Hàn như "설정", tiếng Nhật,...). Mọi câu từ phải kết thúc hoàn toàn bằng tiếng Việt tự nhiên (ví dụ dùng "nhanh chóng", "mượt mà"). Không nhắc tên linh kiện cụ thể.
+   - TUYỆT ĐỐI KHÔNG được sử dụng hoặc đề cập đến các từ khóa/thuật ngữ kỹ thuật nội bộ của lập trình như "build_type", "cpu_brand", "explanation", "workstation", "gaming", "office" trong phần diễn giải gửi cho khách hàng. Hãy đóng vai một tư vấn viên PC thân thiện và chuyên nghiệp, giải thích tự nhiên về lợi ích phần cứng mang lại (ví dụ thay vì nói "chọn build_type là gaming", hãy nói "cấu hình này được thiết kế để mang lại trải nghiệm chiến game mượt mà").
+   - Khi giải thích cho cấu hình làm việc đồ họa, dựng video, lập trình..., hãy diễn giải dưới góc độ tối ưu hóa phần cứng thực tế phục vụ cho công việc (ví dụ: cần hiệu năng CPU đa nhân để xử lý và render nhanh hơn, card đồ họa rời để tăng tốc độ dựng hình/mã hóa video, dung lượng RAM lớn để phục vụ các dự án đa nhiệm mượt mà). KHÔNG ĐƯỢC dùng các từ sáo rỗng dễ gây hiểu nhầm như "workstation chuyên nghiệp" hay "máy trạm chuyên nghiệp", thay vào đó hãy tập trung vào tính chuyên dụng của phần cứng cho đồ họa/dựng phim.
 5. Chỉ trả về đúng 1 build.
 
 Format bắt buộc:
@@ -198,12 +199,24 @@ EOT;
             });
         };
 
+        // 0. Try AMD X3D CPU first for gaming builds if brand is AMD or any
+        $cpu = null;
+        if ($buildType === 'gaming' && in_array($cpuBrand, ['amd', 'any'])) {
+            $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuMin, $ep, $hasMb) {
+                $q->where('components.name', 'ILIKE', '%x3d%');
+                if ($cpuMin > 0) $q->whereRaw("{$ep} >= ?", [$cpuMin]);
+                $hasMb($q);
+            });
+        }
+
         // 1. Try with requested brand within cpuMax
-        $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb) {
-            if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
-            if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
-            $hasMb($q);
-        });
+        if (!$cpu) {
+            $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb) {
+                if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
+                if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
+                $hasMb($q);
+            });
+        }
         
         // 2. Fallback: Try with any brand within cpuMax
         if (!$cpu && $cpuBrand !== 'any') {
@@ -644,12 +657,22 @@ EOT;
         // 8.2. Nâng cấp CPU (đảm bảo cùng socket với mainboard đã chọn)
         if ($remaining >= 200000 && isset($build['components']['cpu'])) {
             $currentCpuPrice = $build['components']['cpu']['price'];
-            $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
-                if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
-                if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
-                if ($socket)            $q->where('cpus.socket', $socket);
-                $hasMb($q);
-            });
+            $betterCpu = null;
+            if ($buildType === 'gaming' && in_array($cpuBrand, ['amd', 'any'])) {
+                $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
+                    $q->where('components.name', 'ILIKE', '%x3d%');
+                    if ($socket)            $q->where('cpus.socket', $socket);
+                    $hasMb($q);
+                });
+            }
+            if (!$betterCpu) {
+                $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
+                    if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
+                    if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
+                    if ($socket)            $q->where('cpus.socket', $socket);
+                    $hasMb($q);
+                });
+            }
             if ($betterCpu && (float)$betterCpu->price > $currentCpuPrice) {
                 $diff = (float)$betterCpu->price - $currentCpuPrice;
                 $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => null];
