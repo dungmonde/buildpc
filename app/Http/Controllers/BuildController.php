@@ -23,17 +23,18 @@ class BuildController extends Controller
         $currentSlot = session()->get('build_slot', 1);
         
         // If this is a fresh session (no builds loaded yet), load from database
-        if (auth()->check() && empty(session()->get('build_pc_slots'))) {
+        if (\Illuminate\Support\Facades\Auth::check() && !session()->has('build_pc_slots_loaded')) {
             $this->loadBuildsFromDatabase();
+            session()->put('build_pc_slots_loaded', true);
+            
+            // Auto-load slot data into working session ONLY on the very first load
+            $slots = session()->get('build_pc_slots', []);
+            if (isset($slots[$currentSlot]) && empty(session()->get('build_pc', []))) {
+                session()->put('build_pc', $slots[$currentSlot]);
+            }
         }
 
         $slots = session()->get('build_pc_slots', []);
-
-        // If the active slot has stored data, load it into the working session key
-        if (isset($slots[$currentSlot]) && empty(session()->get('build_pc', []))) {
-            session()->put('build_pc', $slots[$currentSlot]);
-        }
-
         $selected = session()->get('build_pc', []);
 
         $totalPrice = 0;
@@ -46,11 +47,11 @@ class BuildController extends Controller
 
     private function loadBuildsFromDatabase()
     {
-        if (!auth()->check()) {
+        if (!\Illuminate\Support\Facades\Auth::check()) {
             return;
         }
 
-        $user = auth()->user();
+        $user = \Illuminate\Support\Facades\Auth::user();
         
         // Load user's builds from database, limit to 10
         $builds = \App\Models\PcBuild::where('user_id', $user->id)
@@ -168,9 +169,79 @@ class BuildController extends Controller
 
         $typeId = $typeMap[$category] ?? abort(404);
 
-        $items = Component::where('type_id', $typeId)
-            ->with('cheapestPrice')
-            ->get();
+        $query = Component::where('type_id', $typeId)->with('cheapestPrice');
+        $build = session()->get('build_pc', []);
+        $filterMessage = null;
+        $recommendedWattage = 0;
+
+        if ($category === 'mainboard') {
+            $query->with('motherboard');
+            if (isset($build['cpu'])) {
+                $cpuId = $build['cpu']['id'];
+                $cpu = \App\Models\Cpu::where('component_id', $cpuId)->first();
+                if ($cpu && $cpu->socket) {
+                    $query->whereHas('motherboard', function ($q) use ($cpu) {
+                        $q->where('socket', $cpu->socket);
+                    });
+                    $filterMessage = "Socket {$cpu->socket}";
+                }
+            }
+            if (isset($build['ram'])) {
+                $ramId = $build['ram']['id'];
+                $ram = \App\Models\Memory::where('component_id', $ramId)->first();
+                if ($ram && $ram->ddr_gen) {
+                    $query->whereHas('motherboard', function ($q) use ($ram) {
+                        $q->where('ddr_gen', $ram->ddr_gen);
+                    });
+                    $filterMessage = $filterMessage 
+                        ? $filterMessage . " và RAM DDR{$ram->ddr_gen}." 
+                        : "RAM DDR{$ram->ddr_gen}.";
+                }
+            }
+        } elseif ($category === 'cpu') {
+            if (isset($build['mainboard'])) {
+                $mbId = $build['mainboard']['id'];
+                $mb = \App\Models\Motherboard::where('component_id', $mbId)->first();
+                if ($mb && $mb->socket) {
+                    $query->whereHas('cpu', function ($q) use ($mb) {
+                        $q->where('socket', $mb->socket);
+                    });
+                    $filterMessage = "Socket {$mb->socket} của Mainboard.";
+                }
+            }
+        } elseif ($category === 'ram') {
+            if (isset($build['mainboard'])) {
+                $mbId = $build['mainboard']['id'];
+                $mb = \App\Models\Motherboard::where('component_id', $mbId)->first();
+                if ($mb && $mb->ddr_gen) {
+                    $query->whereHas('ram', function ($q) use ($mb) {
+                        $q->where('ddr_gen', $mb->ddr_gen);
+                    });
+                    $filterMessage = "DDR{$mb->ddr_gen}";
+                }
+            }
+        } elseif ($category === 'psu') {
+            $query->with('psu');
+            $cpuTdp = 0;
+            $gpuTdp = 0;
+
+            if (isset($build['cpu'])) {
+                $cpu = \App\Models\Cpu::where('component_id', $build['cpu']['id'])->first();
+                if ($cpu && $cpu->tdp) $cpuTdp = $cpu->tdp;
+            }
+
+            if (isset($build['vga'])) {
+                $gpu = \App\Models\VideoCard::where('component_id', $build['vga']['id'])->first();
+                if ($gpu && $gpu->tdp) $gpuTdp = $gpu->tdp;
+            }
+
+            if ($cpuTdp > 0 || $gpuTdp > 0) {
+                $totalTdp = $cpuTdp + $gpuTdp + 50; // 50W for system
+                $recommendedWattage = $totalTdp + 150; // 150W margin
+            }
+        }
+
+        $items = $query->get();
 
         $categoryNames = [
             'cpu' => 'Vi xử lý',
@@ -179,23 +250,31 @@ class BuildController extends Controller
             'vga' => 'Card đồ họa',
             'psu' => 'Nguồn',
             'storage' => 'Ổ cứng',
-            'case' => 'Vỏ máy'
+            'case' => 'Vỏ máy',
+            'cooler' => 'Tản nhiệt'
         ];
 
         $category_name = $categoryNames[$category] ?? 'Linh kiện';
 
-        return view('pages.build_pc.build-select', compact('items', 'category', 'category_name'));
+        return view('pages.build_pc.build-select', compact('items', 'category', 'category_name', 'filterMessage', 'recommendedWattage'));
     }
 
     public function addComponent($category, $id)
     {
-        $component = Component::with('cheapestPrice')->findOrFail($id);
+        $component = Component::with(['cheapestPrice', 'motherboard', 'gpu'])->findOrFail($id);
+
+        $name = $component->name;
+        if ($category === 'mainboard' && $component->motherboard?->chipset) {
+            $name = $component->manufacturer . ' ' . $component->motherboard->chipset;
+        } elseif ($category === 'vga' && $component->gpu?->chipset) {
+            $name = $component->manufacturer . ' ' . $component->gpu->chipset;
+        }
 
         $build = session()->get('build_pc', []);
 
         $build[$category] = [
             'id'    => $component->id,
-            'name'  => $component->name,
+            'name'  => $name,
             'price' => $component->base_price ?? $component->cheapestPrice?->price ?? 0,
             'image' => $component->image_url ?? null,
         ];
@@ -298,11 +377,11 @@ class BuildController extends Controller
                 ->with('error', 'Vui lòng chọn ít nhất một linh kiện.');
         }
 
-        if (!auth()->check()) {
+        if (!\Illuminate\Support\Facades\Auth::check()) {
             return redirect()->route('login');
         }
 
-        $user = auth()->user();
+        $user = \Illuminate\Support\Facades\Auth::user();
 
         // Check if user has reached the 10 build limit (only for new builds)
         $slotBuildIds = session()->get('build_slot_ids', []);
@@ -371,7 +450,7 @@ class BuildController extends Controller
             abort(404);
         }
 
-        if (!auth()->check()) {
+        if (!\Illuminate\Support\Facades\Auth::check()) {
             return redirect()->route('login');
         }
 
@@ -385,7 +464,7 @@ class BuildController extends Controller
 
         $pcBuild = \App\Models\PcBuild::find($buildId);
         
-        if (!$pcBuild || $pcBuild->user_id !== auth()->id()) {
+        if (!$pcBuild || $pcBuild->user_id !== \Illuminate\Support\Facades\Auth::id()) {
             abort(403, 'Bạn không có quyền xóa cấu hình này.');
         }
 

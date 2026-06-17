@@ -55,7 +55,6 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 @foreach($stats['categories'] ?? [] as $cat)
                     <div class="card p-4 text-center hover:shadow-sm transition">
-                        <div class="text-xl mb-2">{{ $cat['icon'] }}</div>
                         <p class="text-sm font-semibold">{{ $cat['name'] }}</p>
                         <p class="text-xl font-bold mt-1">{{ $cat['count'] }}</p>
                     </div>
@@ -158,6 +157,30 @@
                 loadTable(tableUrl.pathname + tableUrl.search);
             });
         });
+        updateEditLinks();
+        updateDeleteForms();
+    }
+
+    // Gắn return_url thực tế (từ window.location) vào nút Sửa
+    function updateEditLinks() {
+        const returnUrl = window.location.href;
+        document.querySelectorAll('.edit-btn').forEach(link => {
+            const editUrl = link.dataset.editUrl;
+            link.href = editUrl + '?return_url=' + encodeURIComponent(returnUrl);
+        });
+    }
+
+    // Gắn return_url + scroll_y vào form Xoá
+    function updateDeleteForms() {
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                if (!confirm('Xác nhận xoá linh kiện này?')) return;
+                const form = this.closest('.delete-form');
+                form.querySelector('input[name="return_url"]').value = window.location.href;
+                form.querySelector('input[name="scroll_y"]').value = window.scrollY;
+                form.submit();
+            });
+        });
     }
 
     // Client-side search
@@ -186,5 +209,19 @@
 
     // Attach initial pagination listeners
     attachPaginationListeners();
+    updateEditLinks();
+    updateDeleteForms();
+
+    // Khôi phục vị trí cuộn sau khi xoá
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#scroll=')) {
+        const scrollY = parseInt(hash.replace('#scroll=', ''), 10);
+        if (!isNaN(scrollY)) {
+            // Xoá fragment khỏi URL
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+            // Scroll sau khi table đã render
+            requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' }));
+        }
+    }
 </script>
 @endsection

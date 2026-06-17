@@ -61,7 +61,8 @@ class AdminComponentController extends Controller
         if (!$component) abort(404);
 
         $categories = $this->getCategories();
-        return view('pages.admin.components.edit', compact('component', 'categories'));
+        $returnUrl = request('return_url', route('dashboard'));
+        return view('pages.admin.components.edit', compact('component', 'categories', 'returnUrl'));
     }
 
     // Cập nhật thông tin linh kiện
@@ -117,7 +118,8 @@ class AdminComponentController extends Controller
             $this->saveComponentImage($request->file('image'), $categorySlug, $id);
         }
 
-        return redirect()->route('dashboard')
+        $redirectTo = $request->input('return_url', route('dashboard'));
+        return redirect($redirectTo)
             ->with('success', 'Cập nhật linh kiện thành công!');
     }
 
@@ -165,21 +167,21 @@ class AdminComponentController extends Controller
 
         $slug = strtolower(trim($typeName));
         $slugMap = [
-            'cpu'                => 'cpu',
-            'video card'         => 'gpu',
-            'gpu'                => 'gpu',
-            'graphics card'      => 'gpu',
-            'memory'             => 'ram',
-            'ram'                => 'ram',
+            'cpu'                 => 'cpu',
+            'video card'          => 'gpu',
+            'gpu'                 => 'gpu',
+            'graphics card'       => 'gpu',
+            'memory'              => 'ram',
+            'ram'                 => 'ram',
             'internal hard drive' => 'storage',
-            'storage'            => 'storage',
-            'ssd'                => 'storage',
-            'motherboard'        => 'motherboard',
-            'power supply'       => 'psu',
-            'psu'                => 'psu',
-            'cpu cooler'         => 'cooler',
-            'cooler'             => 'cooler',
-            'case'               => 'case',
+            'storage'             => 'storage',
+            'ssd'                 => 'storage',
+            'motherboard'         => 'motherboard',
+            'power supply'        => 'psu',
+            'psu'                 => 'psu',
+            'cpu cooler'          => 'cooler',
+            'cooler'              => 'cooler',
+            'case'                => 'case',
         ];
 
         return $slugMap[$slug] ?? str_replace(' ', '-', $slug);
@@ -189,8 +191,12 @@ class AdminComponentController extends Controller
     public function destroy($id)
     {
         DB::table('components')->where('id', $id)->delete();
-
-        return redirect()->route('dashboard')
+        $redirectTo = request('return_url', route('dashboard'));
+        $scrollY = (int) request('scroll_y', 0);
+        if ($scrollY > 0) {
+            $redirectTo .= '#scroll=' . $scrollY;
+        }
+        return redirect($redirectTo)
             ->with('success', 'Đã xoá linh kiện!');
     }
 
@@ -229,7 +235,7 @@ class AdminComponentController extends Controller
 
         if ($priceRowId) {
             DB::table('component_prices')->where('id', $priceRowId)->update([
-                'price' => $price,
+                'price'      => $price,
                 'updated_at' => now(),
             ]);
             return;
@@ -242,9 +248,9 @@ class AdminComponentController extends Controller
 
         DB::table('component_prices')->insert([
             'component_id' => $componentId,
-            'dealer_id' => $dealerId,
-            'price' => $price,
-            'updated_at' => now(),
+            'dealer_id'    => $dealerId,
+            'price'        => $price,
+            'updated_at'   => now(),
         ]);
     }
 }

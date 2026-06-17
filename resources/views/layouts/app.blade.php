@@ -109,7 +109,7 @@
 
     {{-- Footer --}}
     <footer class="border-t border-gray-200 mt-20">
-        <div class="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div class="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-5 gap-8">
             {{-- Logo + contact --}}
             <div>
                 <a href="/" class="inline-flex items-center mb-4">
@@ -149,6 +149,15 @@
                     <li><a href="http://127.0.0.1:8000/linh-kien/ram" class="hover:text-black">RAM</a></li>
                     <li><a href="http://127.0.0.1:8000/linh-kien/storage" class="hover:text-black">Ổ cứng</a></li>
                 </ul>
+            </div>
+
+            {{-- Trụ sở chính --}}
+            <div class="md:col-span-1">
+                <h4 class="font-bold mb-3 text-sm uppercase tracking-wide">Trụ sở chính</h4>
+                <p class="text-sm text-gray-600 mb-3 leading-relaxed">120 P. Yên Lãng, Đống Đa, Hà Nội</p>
+                <div class="w-full h-32 overflow-hidden rounded-lg border border-gray-200">
+                    <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2289.0491584221722!2d105.81226417245436!3d21.010485380634233!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac9d65911ef1%3A0x6a4df45cca423e18!2zMTIwIFAuWcOqbiBMw6NuZywgxJDhu5FuZyDEkGEsIEjDoCBO4buZaSAxMDAwMDAsIFZp4buHdCBOYW0!5e1!3m2!1svi!2s!4v1781520481616!5m2!1svi!2s" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </div>
             </div>
         </div>
 

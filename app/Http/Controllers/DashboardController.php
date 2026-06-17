@@ -24,7 +24,6 @@ class DashboardController extends Controller
 
     private function adminDashboard()
     {
-        // Đếm component theo type_name (join với component_types)
         $categoryCounts = DB::table('components')
             ->join('component_types', 'components.type_id', '=', 'component_types.id')
             ->select('component_types.type_name', DB::raw('count(*) as count'))
@@ -33,17 +32,16 @@ class DashboardController extends Controller
             ->toArray();
 
         $iconMap = [
-            'CPU'              => ['icon' => '', 'color' => 'blue'],
-            'Video Card'       => ['icon' => '', 'color' => 'green'],
-            'Memory'           => ['icon' => '', 'color' => 'purple'],
-            'Case'             => ['icon' => '', 'color' => 'orange'],
-            'Motherboard'      => ['icon' => '', 'color' => 'red'],
-            'Power Supply'     => ['icon' => '', 'color' => 'yellow'],
-            'Internal Hard Drive' => ['icon' => '', 'color' => 'pink'],
-            'CPU Cooler'       => ['icon' => '', 'color' => 'cyan'],
+            'CPU'                 => ['icon' => '', 'color' => 'blue'],
+            'GPU'                 => ['icon' => '', 'color' => 'green'],
+            'RAM'                 => ['icon' => '', 'color' => 'purple'],
+            'CASE'                => ['icon' => '', 'color' => 'orange'],
+            'MOTHERBOARD'         => ['icon' => '', 'color' => 'red'],
+            'PSU'                 => ['icon' => '', 'color' => 'yellow'],
+            'STORAGE'             => ['icon' => '', 'color' => 'pink'],
+            'COOLER'              => ['icon' => '', 'color' => 'cyan'],
         ];
 
-        // Lấy tất cả type_name thật từ DB, map icon nếu có
         $allTypes = DB::table('component_types')->pluck('type_name');
         $categories = $allTypes->map(function ($typeName) use ($categoryCounts, $iconMap) {
             return [
@@ -62,18 +60,14 @@ class DashboardController extends Controller
             'categories'       => $categories,
         ];
 
-        // Danh sách linh kiện kèm type_name, giá thấp nhất từ component_prices
-        $query = DB::table('components')
-            ->join('component_types', 'components.type_id', '=', 'component_types.id')
-            ->leftJoin(DB::raw('(SELECT component_id, MIN(price) as min_price FROM component_prices GROUP BY component_id) cp'), 'components.id', '=', 'cp.component_id')
-            ->select(
-                'components.id',
-                'components.name',
-                'component_types.type_name as category',
-                DB::raw('COALESCE(components.base_price, cp.min_price) as price')
-            );
+        $query = \App\Models\Component::with([
+            'componentType',
+            'cheapestPrice',
+            'cpu', 'gpu', 'ram', 'storage', 'motherboard', 'psu', 'cooler', 'pcCase'
+        ])
+        ->join('component_types', 'components.type_id', '=', 'component_types.id')
+        ->select('components.*');
 
-        // Filter by category if provided
         $selectedCategory = request()->query('category');
         if ($selectedCategory) {
             $query->where('component_types.type_name', '=', $selectedCategory);
@@ -115,18 +109,14 @@ class DashboardController extends Controller
 
     public function getComponentsTable()
     {
-        // Danh sách linh kiện kèm type_name, giá thấp nhất từ component_prices
-        $query = DB::table('components')
-            ->join('component_types', 'components.type_id', '=', 'component_types.id')
-            ->leftJoin(DB::raw('(SELECT component_id, MIN(price) as min_price FROM component_prices GROUP BY component_id) cp'), 'components.id', '=', 'cp.component_id')
-            ->select(
-                'components.id',
-                'components.name',
-                'component_types.type_name as category',
-                DB::raw('COALESCE(components.base_price, cp.min_price) as price')
-            );
+        $query = \App\Models\Component::with([
+            'componentType',
+            'cheapestPrice',
+            'cpu', 'gpu', 'ram', 'storage', 'motherboard', 'psu', 'cooler', 'pcCase'
+        ])
+        ->join('component_types', 'components.type_id', '=', 'component_types.id')
+        ->select('components.*');
 
-        // Filter by category if provided
         $selectedCategory = request()->query('category');
         if ($selectedCategory) {
             $query->where('component_types.type_name', '=', $selectedCategory);

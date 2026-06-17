@@ -129,4 +129,43 @@ class ComponentController extends Controller
 
         return view('pages.components.index', compact('components', 'type', 'specRelation', 'dynamicFilters'));
     }
+
+    public function show($type, $id)
+    {
+        $typeMap = [
+            'cpu' => 1, 'gpu' => 2, 'ram' => 3, 'storage' => 4,
+            'motherboard' => 5, 'psu' => 6, 'cooler' => 7, 'case' => 8,
+        ];
+
+        if (!array_key_exists($type, $typeMap)) {
+            abort(404);
+        }
+
+        $typeId = $typeMap[$type];
+
+        $specRelation = match($type) {
+            'case' => 'pcCase',
+            default => $type,
+        };
+
+        $component = Component::with(['cheapestPrice', $specRelation])->findOrFail($id);
+
+        // Ensure the component type from URL matches the database
+        if ($component->type_id !== $typeId) {
+            abort(404);
+        }
+
+        $spec = $component->{$specRelation};
+        $price = $component->base_price ?? $component->cheapestPrice?->price;
+
+        // Get 4 random related components of the same type
+        $relatedComponents = Component::with('cheapestPrice')
+            ->where('type_id', $component->type_id)
+            ->where('id', '!=', $component->id)
+            ->inRandomOrder()
+            ->limit(4)
+            ->get();
+
+        return view('pages.components.show', compact('component', 'type', 'spec', 'price', 'relatedComponents'));
+    }
 }

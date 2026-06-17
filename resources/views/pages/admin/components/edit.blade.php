@@ -6,7 +6,7 @@
     <div class="max-w-2xl mx-auto">
 
         <div class="mb-8">
-            <a href="{{ route('dashboard') }}" class="text-sm text-slate-500 hover:text-slate-900 transition-colors mb-3 inline-flex items-center gap-1">
+            <a href="{{ $returnUrl ?? route('dashboard') }}" class="text-sm text-slate-500 hover:text-slate-900 transition-colors mb-3 inline-flex items-center gap-1">
                 ← Quay lại dashboard
             </a>
             <h1 class="text-2xl font-bold text-slate-900">Sửa linh kiện</h1>
@@ -26,6 +26,7 @@
         <form action="{{ route('admin.components.update', $component->id) }}" method="POST" enctype="multipart/form-data" class="card p-6 space-y-5">
             @csrf
             @method('PUT')
+            <input type="hidden" name="return_url" value="{{ $returnUrl ?? route('dashboard') }}">
 
             <div>
                 <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Tên linh kiện *</label>
@@ -51,9 +52,10 @@
             </div>
 
             <div>
-                <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá (VNĐ)</label>
+                <label class="block text-xs font-semibold tracking-wider text-gray-400 uppercase mb-2">Giá niêm yết (VNĐ)</label>
                 <input type="number" name="base_price" value="{{ old('base_price', $component->base_price ?? 0) }}" min="0" step="1000"
-                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm">
+                    class="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400 text-sm"
+                    placeholder="Có thể bỏ trống">
             </div>
 
             <div>
@@ -75,7 +77,7 @@
                     class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
                     Lưu thay đổi
                 </button>
-                <a href="{{ route('dashboard') }}"
+                <a href="{{ $returnUrl ?? route('dashboard') }}"
                     class="px-6 border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold py-2.5 rounded-xl transition-colors text-sm text-center">
                     Huỷ
                 </a>

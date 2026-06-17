@@ -19,7 +19,7 @@ $categoryConfig = [
             ['title' => 'Chipset',    'key' => 'chipset',     'suffix' => ''],
             ['title' => 'VRAM',       'key' => 'memory',      'suffix' => 'GB'],
             ['title' => 'Xung cơ bản','key' => 'core_clock',  'suffix' => ' MHz'],
-            ['title' => 'Xung boost', 'key' => 'boost_clock', 'suffix' => ' MHz'],
+            ['title' => 'TDP',        'key' => 'tdp',         'suffix' => ' W'],
             ['title' => 'Chiều dài',  'key' => 'length',      'suffix' => 'mm'],
         ]
     ],

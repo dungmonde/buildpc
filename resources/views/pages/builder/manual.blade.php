@@ -28,6 +28,10 @@
                 <h1 class="text-4xl font-bold text-slate-900">Xây dựng cấu hình PC</h1>
                 <p class="text-slate-500 mt-2">Chọn từng linh kiện để hoàn thiện bộ máy của bạn. (Tối đa 10 cấu hình)</p>
             </div>
+            <a href="{{ route('builder.recommend') }}" class="btn bg-slate-900 text-white px-6 py-2.5 rounded-xl hover:bg-primary-600 transition shadow-lg shadow-slate-200 font-bold flex items-center gap-2">
+                <span>✨ Nhờ AI Tư vấn</span>
+            </a>
+        </div>
 
             <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-full p-1 flex-wrap justify-end">
                 {{-- Build slots tabs (1..10) --}}
@@ -51,9 +55,32 @@
             @foreach($categories as $key => $name)
             <div class="card p-7 flex items-center justify-between group hover:shadow-md transition">
                 <div class="flex items-center gap-8">
-                    <span class="text-5xl font-black text-slate-200 group-hover:text-slate-300 transition">
-                        0{{ $loop->iteration }}
-                    </span>
+                    @php
+                        $hasImage = false;
+                        $imageUrl = '';
+                        if(isset($selected[$key])) {
+                            $imageFolder = match($key) {
+                                'vga' => 'gpu',
+                                'mainboard' => 'motherboard',
+                                default => $key,
+                            };
+                            $imagePath = public_path('images/components/' . $imageFolder . '/' . $selected[$key]['id'] . '.jpg');
+                            if (file_exists($imagePath)) {
+                                $hasImage = true;
+                                $imageUrl = asset('images/components/' . $imageFolder . '/' . $selected[$key]['id'] . '.jpg');
+                            }
+                        }
+                    @endphp
+
+                    @if(isset($selected[$key]) && $hasImage)
+                        <div class="w-16 h-16 shrink-0 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2 shadow-sm">
+                            <img src="{{ $imageUrl }}" alt="{{ $selected[$key]['name'] }}" class="max-w-full max-h-full object-contain rounded-lg">
+                        </div>
+                    @else
+                        <span class="text-5xl font-black text-slate-200 group-hover:text-slate-300 transition w-16 text-center">
+                            0{{ $loop->iteration }}
+                        </span>
+                    @endif
                     
                     <div>
                         <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">{{ $name }}</h3>

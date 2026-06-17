@@ -101,8 +101,8 @@
                             </div>
 
                             <div class="grid grid-cols-2">
-                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">Boost Clock</div>
-                                <div class="px-5 py-4 font-semibold">{{ $spec->boost_clock }} MHz</div>
+                                <div class="px-5 py-4 bg-gray-50 font-medium text-gray-600">TDP</div>
+                                <div class="px-5 py-4 font-semibold">{{ $spec->tdp }} W</div>
                             </div>
 
                             <div class="grid grid-cols-2">
@@ -251,18 +251,44 @@
         </div>
     </div>
 
-    <div class="mt-8 card">
-        <div class="px-6 py-4 bg-gray-50">
-            <h2 class="text-xl font-black uppercase tracking-wide">
-                Biến động giá
+    <div class="mt-12">
+        <div class="mb-6">
+            <h2 class="text-2xl font-bold uppercase tracking-wide">
+                Sản phẩm liên quan
             </h2>
         </div>
 
-        <div class="p-6">
-            <div class="h-[350px] border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-sm uppercase tracking-wide">
-                Chưa có dữ liệu 
+        @if(isset($relatedComponents) && $relatedComponents->isNotEmpty())
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                @foreach($relatedComponents as $related)
+                    @php
+                        $relatedPrice = $related->base_price ?? $related->cheapestPrice?->price;
+                    @endphp
+                    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden group transition hover:shadow-lg hover:-translate-y-1">
+                        <a href="{{ route('components.show', [$type, $related->id]) }}" class="block">
+                            <div class="bg-slate-50 h-48 flex items-center justify-center p-4">
+                                <img src="{{ asset('images/components/' . $type . '/' . $related->id . '.jpg') }}"
+                                     onerror="this.parentElement.innerHTML = '<span class=\'text-2xl\'>📦</span>'"
+                                     class="max-h-full max-w-full object-contain transition-transform group-hover:scale-105">
+                            </div>
+                            <div class="p-4">
+                                <p class="text-sm font-semibold text-slate-800 group-hover:text-blue-600 line-clamp-2 h-10">{{ $related->name }}</p>
+                                @if($relatedPrice)
+                                    <p class="text-base font-bold text-slate-900 mt-2">{{ number_format($relatedPrice, 0, ',', '.') }} ₫</p>
+                                @else
+                                    <p class="text-sm text-slate-500 mt-2">Liên hệ</p>
+                                @endif
+                            </div>
+                        </a>
+                    </div>
+                @endforeach
             </div>
-        </div>
+        @else
+            <div class="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500">
+                <p>Không tìm thấy sản phẩm liên quan.</p>
+                <p class="text-xs mt-1">Có thể do chưa có đủ dữ liệu trong cùng danh mục.</p>
+            </div>
+        @endif
     </div>
 
 </div>

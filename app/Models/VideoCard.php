@@ -10,7 +10,7 @@ class VideoCard extends Model
     protected $primaryKey = 'component_id';
     protected $fillable = [
         'component_id', 'chipset', 'memory',
-        'core_clock', 'boost_clock', 'color', 'length'
+        'core_clock', 'boost_clock', 'color', 'length', 'tdp'
     ];
 
     public function component()

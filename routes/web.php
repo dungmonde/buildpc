@@ -4,14 +4,12 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ForumController;
 use App\Http\Controllers\BuildController;
 use App\Http\Controllers\ComponentController;
-use App\Models\Component;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AdminComponentController;
+use App\Http\Controllers\AiBuildController;
 
 // Trang chủ
-use Illuminate\Support\Facades\DB;
-
 Route::get('/', function () {
     $posts = App\Models\Post::with('user')
         ->latest()
@@ -27,36 +25,13 @@ Route::get('/huong-dan', fn() => view('pages.guides.index'))->name('guides.index
 
 // Linh kiện
 Route::get('/linh-kien/{type}', [ComponentController::class, 'index'])->name('components.index');
-Route::get('/linh-kien/{type}/{id}', function ($type, $id) {
-    $map = [
-        'cpu'         => 'cpu',
-        'gpu'         => 'gpu',
-        'ram'         => 'ram',
-        'storage'     => 'storage',
-        'motherboard' => 'motherboard',
-        'psu'         => 'psu',
-        'cooler'      => 'cooler',
-        'case'        => 'case_'
-    ];
-
-    if (!array_key_exists($type, $map)) {
-        abort(404);
-    }
-
-    $relation  = $map[$type];
-    $component = Component::with([$relation, 'prices'])->findOrFail($id);
-    $spec      = $component->$relation;
-    $price     = $component->base_price ?? $component->prices->min('price');
-
-    return view('pages.components.show', compact('component', 'spec', 'price', 'type'));
-})->name('components.show');
+Route::get('/linh-kien/{type}/{id}', [ComponentController::class, 'show'])->name('components.show');
 
 // PC Builder
 Route::get('/builder', [BuildController::class, 'index'])->name('builder.manual');
-Route::get('/builder/goi-y', [RecommendController::class, 'index'])->name('builder.recommend');
-Route::post('/builder/goi-y', [RecommendController::class, 'recommend'])->name('builder.recommend.result');
-Route::post('/builder/goi-y/apply', [RecommendController::class, 'applyRecommend'])
-    ->middleware('auth')->name('build.apply-recommend');
+Route::get('/builder/goi-y', [AiBuildController::class, 'index'])->name('builder.recommend');
+Route::post('/builder/goi-y', [AiBuildController::class, 'suggest'])->name('ai.suggest.post');
+Route::post('/builder/goi-y/apply', [AiBuildController::class, 'applyAiBuild'])->name('ai.apply');
 
 // Build PC chi tiết
 Route::prefix('build-pc')->name('build.')->group(function () {
@@ -126,3 +101,4 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 });
 
 require __DIR__.'/auth.php';
+
