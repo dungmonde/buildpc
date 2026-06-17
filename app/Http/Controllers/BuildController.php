@@ -256,6 +256,10 @@ class BuildController extends Controller
 
         $category_name = $categoryNames[$category] ?? 'Linh kiện';
 
+        if (request()->ajax() || request()->has('ajax')) {
+            return view('pages.build_pc.partials.select-list', compact('items', 'category', 'category_name', 'filterMessage', 'recommendedWattage'));
+        }
+
         return view('pages.build_pc.build-select', compact('items', 'category', 'category_name', 'filterMessage', 'recommendedWattage'));
     }
 

@@ -14,7 +14,7 @@
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
                 <div class="p-8 bg-slate-50 border-b border-slate-200">
                     <h2 class="text-2xl font-bold text-slate-900 mb-2">{{ $build['title'] }}</h2>
-                    <p class="text-slate-600 italic mb-4">"{{ $build['explanation'] }}"</p>
+                    <p class="text-slate-600 italic mb-4">{{ $build['explanation'] }}</p>
                     <div class="text-3xl font-black text-emerald-600">{{ number_format($build['total_price']) }} ₫</div>
                 </div>
 
@@ -58,7 +58,7 @@
     </div>
     
     <div class="text-center mt-12">
-        <a href="{{ route('builder.recommend') }}" class="text-slate-500 hover:text-slate-900 font-medium">← Thử lại với nhu cầu khác</a>
+        <a href="{{ route('builder.recommend') }}" class="text-slate-500 hover:text-slate-900 font-medium">← Thử lại</a>
     </div>
 </div>
 @endsection

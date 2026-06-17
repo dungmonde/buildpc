@@ -23,31 +23,22 @@
             </div>
         @endif
 
-        <div class="mb-6 flex items-start justify-between">
+        <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 class="text-4xl font-bold text-slate-900">Xây dựng cấu hình PC</h1>
-                <p class="text-slate-500 mt-2">Chọn từng linh kiện để hoàn thiện bộ máy của bạn. (Tối đa 10 cấu hình)</p>
+                <p class="text-slate-500 mt-2">Chọn từng linh kiện để hoàn thiện bộ máy của bạn.</p>
             </div>
-            <a href="{{ route('builder.recommend') }}" class="btn bg-slate-900 text-white px-6 py-2.5 rounded-xl hover:bg-primary-600 transition shadow-lg shadow-slate-200 font-bold flex items-center gap-2">
-                <span>✨ Nhờ AI Tư vấn</span>
-            </a>
-        </div>
-
-            <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-full p-1 flex-wrap justify-end">
+            <div class="flex items-center gap-3">
                 {{-- Build slots tabs (1..10) --}}
                 @php $active = $currentSlot ?? session('build_slot', 1); @endphp
-                @php $slots = session('build_pc_slots', []); @endphp
-                @php $slotIds = session('build_slot_ids', []); @endphp
-                
-                @for($i = 1; $i <= 10; $i++)
-                    <div class="relative group">
+                <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+                    @for($i = 1; $i <= 10; $i++)
                         <a href="{{ route('build.slot', $i) }}" 
-                           class="px-3 py-1 rounded-full text-sm font-medium {{ $active == $i ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50' }}">
+                           class="w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium {{ $active == $i ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50' }}">
                             {{ $i }}
                         </a>
-                        
-                    </div>
-                @endfor
+                    @endfor
+                </div>
             </div>
         </div>
 
@@ -104,6 +95,7 @@
                     @endif
                     
                     <a href="{{ route('build.select', ['category' => $key]) }}" 
+                       onclick="openComponentModal(event, '{{ $key }}', '{{ $name }}')"
                        class="btn {{ isset($selected[$key]) ? 'btn-primary' : 'bg-slate-100 hover:bg-slate-200 text-slate-700' }} px-8 py-3">
                         {{ isset($selected[$key]) ? 'Thay đổi' : '+ Chọn' }}
                     </a>
@@ -143,4 +135,77 @@
         </div>
     </div>
 </div>
+
+{{-- Component Selector Modal --}}
+<div id="component-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden transform scale-95 opacity-0 transition-all duration-300" id="component-modal-content">
+        {{-- Modal Header --}}
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+            <h3 class="text-xl font-bold text-slate-900" id="modal-title">Chọn linh kiện</h3>
+            <button onclick="closeComponentModal()" class="text-slate-400 hover:text-slate-600 transition p-1 rounded-lg hover:bg-slate-100">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        {{-- Modal Body --}}
+        <div class="p-6 overflow-y-auto flex-1 bg-slate-50" id="modal-body">
+            <div class="flex justify-center py-12">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openComponentModal(event, category, categoryName) {
+    event.preventDefault();
+    
+    const modal = document.getElementById('component-modal');
+    const content = document.getElementById('component-modal-content');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    
+    title.textContent = 'Chọn ' + categoryName;
+    
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+    
+    body.innerHTML = `
+        <div class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+        </div>
+    `;
+    
+    fetch(`/build-pc/select/${category}?ajax=1`)
+        .then(res => res.text())
+        .then(html => {
+            body.innerHTML = html;
+        })
+        .catch(err => {
+            body.innerHTML = `<p class="text-red-500 text-center py-8">Không thể tải danh sách linh kiện. Vui lòng thử lại.</p>`;
+        });
+}
+
+function closeComponentModal() {
+    const modal = document.getElementById('component-modal');
+    const content = document.getElementById('component-modal-content');
+    
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+document.getElementById('component-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeComponentModal();
+    }
+});
+</script>
 @endsection

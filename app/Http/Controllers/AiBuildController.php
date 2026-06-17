@@ -32,12 +32,17 @@ class AiBuildController extends Controller
         $systemPrompt = <<<EOT
 Bạn là chuyên gia tư vấn cấu hình PC. Đọc nhu cầu và ngân sách, trả về JSON thuần túy (không có markdown).
 Quy tắc:
-1. build_type chỉ được là: "gaming", "office", "workstation".
+1. Phân loại build_type dựa trên nhu cầu của người dùng:
+   - "gaming": Cho nhu cầu chơi game (Esports, AAA, LOL, Valorant, v.v.) hoặc giải trí chơi game.
+   - "workstation": Cho nhu cầu làm việc chuyên nghiệp, đồ họa, thiết kế, dựng phim, biên tập/edit video, render 3D, lập trình, học máy, AI, photoshop, premiere, after effects, v.v. Bắt buộc phải chọn workstation cho mọi nhu cầu liên quan đến edit video, dựng hình, đồ họa hay thiết kế.
+   - "office": Cho các nhu cầu văn phòng thông thường, kế toán, học tập cơ bản, lướt web, xem phim, sử dụng Office (Word, Excel, v.v.).
 2. cpu_brand chỉ được là: "intel", "amd", "any".
 3. Xử lý các yêu cầu lệch lệch/không thực tế:
    - Nếu ngân sách quá cao so với nhu cầu (ví dụ: 30-50 triệu cho văn phòng cơ bản), hãy tự động chuyển đổi build_type thành "workstation" để phân bổ thêm card đồ họa chuyên dụng và linh kiện cao cấp, đồng thời giải thích rõ trong explanation về sự nâng cấp này để tận dụng tối đa ngân sách và tránh lãng phí.
    - Nếu ngân sách quá thấp so với nhu cầu (ví dụ: 10 triệu chơi game AAA nặng), hãy chọn build_type phù hợp nhất và giải thích rõ trong explanation về giới hạn hiệu năng của cấu hình và khuyến nghị nâng cấp sau này.
-4. explanation phải viết bằng 100% tiếng Việt tự nhiên và chuẩn xác, không được pha trộn hoặc sử dụng bất kỳ từ ngữ hay ký tự nước ngoài nào khác (ví dụ: tiếng Hàn như "설정", tiếng Trung, tiếng Nhật,...), không nhắc tên linh kiện cụ thể.
+4. Yêu cầu về phần diễn giải (explanation):
+   - Phải viết bằng 100% tiếng Việt tự nhiên, thuần túy và chuẩn xác. TUYỆT ĐỐI KHÔNG được pha trộn hoặc sử dụng bất kỳ từ ngữ, ký tự hay chữ viết nước ngoài nào khác (ví dụ: không dùng chữ Hán/tiếng Trung như "快速", tiếng Hàn như "설정", tiếng Nhật,...). Mọi câu từ, đặc biệt là các cụm từ ở cuối câu, phải kết thúc hoàn toàn bằng tiếng Việt tự nhiên (ví dụ dùng "nhanh chóng", "mượt mà"). Không nhắc tên linh kiện cụ thể.
+   - Khi giải thích cho cấu hình "workstation" (làm việc đồ họa, dựng video, lập trình...), hãy diễn giải dưới góc độ tối ưu hóa phần cứng thực tế phục vụ cho công việc (ví dụ: cần hiệu năng CPU đa nhân để xử lý và render nhanh hơn, card đồ họa rời để tăng tốc độ dựng hình/mã hóa video, dung lượng RAM lớn để phục vụ các dự án đa nhiệm mượt mà). KHÔNG ĐƯỢC dùng các từ sáo rỗng dễ gây hiểu nhầm như "workstation chuyên nghiệp" hay "máy trạm chuyên nghiệp", thay vào đó hãy tập trung vào tính chuyên dụng của phần cứng cho đồ họa/dựng phim.
 5. Chỉ trả về đúng 1 build.
 
 Format bắt buộc:
@@ -94,8 +99,7 @@ EOT;
     {
         $buildType = strtolower($intent['build_type'] ?? 'gaming');
         $cpuBrand  = strtolower($intent['cpu_brand']  ?? 'any');
-        $needsGpu  = ($buildType === 'gaming' && $budget >= 9000000)
-                  || ($buildType === 'workstation' && $budget >= 20000000);
+        $needsGpu  = in_array($buildType, ['gaming', 'workstation']) && $budget >= 9000000;
 
         $build = [
             'title'            => $intent['title']       ?? 'Cấu hình Đề xuất',
@@ -185,9 +189,12 @@ EOT;
         $cpuMax = min($alloc['cpu'], $remaining - $reserve);
 
         // Subquery helper to make sure picked CPU has at least one matching motherboard in the DB
-        $hasMb = function ($q) {
-            $q->whereIn('cpus.socket', function ($sub) {
+        $hasMb = function ($q) use ($budget) {
+            $q->whereIn('cpus.socket', function ($sub) use ($budget) {
                 $sub->select('socket')->from('motherboards');
+                if ($budget < 12000000) {
+                    $sub->where('socket', '!=', 'AM5');
+                }
             });
         };
 
@@ -386,6 +393,9 @@ EOT;
                 )
                 ->where('components.type_id', 3)
                 ->whereRaw("{$ep} > 0")
+                ->when($ddrGen, function ($q) use ($ddrGen) {
+                    $q->where('memory.ddr_gen', $ddrGen);
+                })
                 ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
@@ -478,6 +488,16 @@ EOT;
                   ->where('internal_hard_drives.type', 'SSD');
             }, true);
         }
+
+        // 5.1. Fallback: SSD even lower capacity (60GB) up to remaining budget
+        if (!$storage) {
+            $reserve = $remainingFloors(['psu', 'case']);
+            $storageLimit = max($storageMax, $remaining - $reserve);
+            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) {
+                $q->where('internal_hard_drives.capacity', '>=', 60)
+                  ->where('internal_hard_drives.type', 'SSD');
+            }, true);
+        }
         
         // 6. Fallback: HDD standard capacity within storageMax
         if (!$storage) {
@@ -502,7 +522,7 @@ EOT;
             $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, null, true);
         }
         
-        // 9. Ultimate Fallback: Select the absolute cheapest storage in the database
+        // 9. Ultimate Fallback: Try cheapest SSD first, then any cheapest storage
         if (!$storage) {
             $storage = \DB::table('components')
                 ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
@@ -512,14 +532,33 @@ EOT;
                 )
                 ->where('components.type_id', 4)
                 ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->where('internal_hard_drives.type', 'SSD')
+                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', \DB::raw("{$ep} as price"))
+                ->orderBy('price')
+                ->first();
+        }
+        if (!$storage) {
+            $storage = \DB::table('components')
+                ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
+                ->leftJoin(
+                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    'cp.component_id', '=', 'components.id'
+                )
+                ->where('components.type_id', 4)
+                ->whereRaw("{$ep} > 0")
+                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', \DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
         
         if ($storage) {
             $price = (float)$storage->price;
-            $build['components']['storage'] = ['id' => $storage->id, 'name' => $storage->name, 'price' => $price, 'image' => null];
+            $capStr = ($storage->capacity >= 1000) ? (($storage->capacity / 1000) . 'TB') : ($storage->capacity . 'GB');
+            $storageName = $storage->name;
+            if (!empty($storage->capacity) && !empty($storage->type)) {
+                $storageName .= ' (' . $capStr . ' ' . $storage->type . ')';
+            }
+            $build['components']['storage'] = ['id' => $storage->id, 'name' => $storageName, 'price' => $price, 'image' => null];
             $build['total_price'] += $price;
             $remaining -= $price;
         }
@@ -588,14 +627,87 @@ EOT;
             $remaining -= $price;
         }
 
-        // ── 8. Nâng cấp VGA với tiền thừa ────────────────────────────────────
-        if ($needsGpu && $remaining >= 500000 && isset($build['components']['vga'])) {
+        // ── 8. Nâng cấp linh kiện với tiền thừa để tối ưu hóa ngân sách ──
+        // 8.1. Nâng cấp VGA (nếu có card rời và còn thừa tiền)
+        if ($needsGpu && $remaining >= 200000 && isset($build['components']['vga'])) {
             $currentVgaPrice = $build['components']['vga']['price'];
             $betterVga       = $this->pickByBudget(2, 'video_cards', $currentVgaPrice + $remaining);
             if ($betterVga && (float)$betterVga->price > $currentVgaPrice) {
                 $diff    = (float)$betterVga->price - $currentVgaPrice;
                 $vgaName = $betterVga->name . (!empty($betterVga->chipset) ? ' (' . $betterVga->chipset . ')' : '');
                 $build['components']['vga'] = ['id' => $betterVga->id, 'name' => $vgaName, 'price' => (float)$betterVga->price, 'image' => null];
+                $build['total_price'] += $diff;
+                $remaining -= $diff;
+            }
+        }
+
+        // 8.2. Nâng cấp CPU (đảm bảo cùng socket với mainboard đã chọn)
+        if ($remaining >= 200000 && isset($build['components']['cpu'])) {
+            $currentCpuPrice = $build['components']['cpu']['price'];
+            $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
+                if ($cpuBrand !== 'any') $q->where('components.name', 'ILIKE', "%{$cpuBrand}%");
+                if ($cpuMin > 0)        $q->whereRaw("{$ep} >= ?", [$cpuMin]);
+                if ($socket)            $q->where('cpus.socket', $socket);
+                $hasMb($q);
+            });
+            if ($betterCpu && (float)$betterCpu->price > $currentCpuPrice) {
+                $diff = (float)$betterCpu->price - $currentCpuPrice;
+                $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => null];
+                $build['total_price'] += $diff;
+                $remaining -= $diff;
+            }
+        }
+
+        // 8.3. Nâng cấp Mainboard (đảm bảo cùng socket với CPU đã chọn)
+        if ($remaining >= 200000 && isset($build['components']['mainboard'])) {
+            $currentMbPrice = $build['components']['mainboard']['price'];
+            $betterMb = $this->pickByBudget(5, 'motherboards', $currentMbPrice + $remaining, function ($q) use ($socket, $excludedChipsets) {
+                if ($socket) $q->where('motherboards.socket', $socket);
+                foreach ($excludedChipsets as $chip) {
+                    $q->where('components.name', 'NOT ILIKE', "%{$chip}%");
+                }
+            });
+            if ($betterMb && (float)$betterMb->price > $currentMbPrice) {
+                $diff = (float)$betterMb->price - $currentMbPrice;
+                $build['components']['mainboard'] = ['id' => $betterMb->id, 'name' => $betterMb->name, 'price' => (float)$betterMb->price, 'image' => null];
+                $build['total_price'] += $diff;
+                $remaining -= $diff;
+            }
+        }
+
+        // 8.4. Nâng cấp RAM (đảm bảo tương thích DDR Gen với mainboard đã chọn)
+        if ($remaining >= 200000 && isset($build['components']['ram'])) {
+            $currentRamPrice = $build['components']['ram']['price'];
+            $betterRam = $this->pickByBudget(3, 'memory', $currentRamPrice + $remaining, function ($q) use ($ddrGen) {
+                if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
+            });
+            if ($betterRam && (float)$betterRam->price > $currentRamPrice) {
+                $diff = (float)$betterRam->price - $currentRamPrice;
+                $build['components']['ram'] = ['id' => $betterRam->id, 'name' => $betterRam->name, 'price' => (float)$betterRam->price, 'image' => null];
+                $build['total_price'] += $diff;
+                $remaining -= $diff;
+            }
+        }
+
+        // 8.5. Nâng cấp Storage (đáp ứng dung lượng và loại tối thiểu của linh kiện hiện tại)
+        if ($remaining >= 200000 && isset($build['components']['storage'])) {
+            $currentStoragePrice = $build['components']['storage']['price'];
+            $currentStorageSpec = \DB::table('internal_hard_drives')->where('component_id', $build['components']['storage']['id'])->first();
+            $currCapacity = $currentStorageSpec->capacity ?? $storageMin;
+            $currType = $currentStorageSpec->type ?? 'SSD';
+
+            $betterStorage = $this->pickByBudget(4, 'internal_hard_drives', $currentStoragePrice + $remaining, function ($q) use ($currCapacity, $currType) {
+                $q->where('internal_hard_drives.capacity', '>=', $currCapacity)
+                  ->where('internal_hard_drives.type', $currType);
+            });
+            if ($betterStorage && (float)$betterStorage->price > $currentStoragePrice) {
+                $diff = (float)$betterStorage->price - $currentStoragePrice;
+                $betterCapStr = ($betterStorage->capacity >= 1000) ? (($betterStorage->capacity / 1000) . 'TB') : ($betterStorage->capacity . 'GB');
+                $betterStorageName = $betterStorage->name;
+                if (!empty($betterStorage->capacity) && !empty($betterStorage->type)) {
+                    $betterStorageName .= ' (' . $betterCapStr . ' ' . $betterStorage->type . ')';
+                }
+                $build['components']['storage'] = ['id' => $betterStorage->id, 'name' => $betterStorageName, 'price' => (float)$betterStorage->price, 'image' => null];
                 $build['total_price'] += $diff;
                 $remaining -= $diff;
             }
@@ -610,7 +722,12 @@ EOT;
     private function pickByBudget(int $typeId, string $specTable, float $maxBudget, ?\Closure $filter = null, bool $asc = false): ?object
     {
         $ep          = 'COALESCE(components.base_price, cp.price)';
-        $selectExtra = $specTable === 'video_cards' ? ['video_cards.chipset'] : [];
+        $selectExtra = [];
+        if ($specTable === 'video_cards') {
+            $selectExtra = ['video_cards.chipset'];
+        } elseif ($specTable === 'internal_hard_drives') {
+            $selectExtra = ['internal_hard_drives.capacity', 'internal_hard_drives.type'];
+        }
 
         $q = \DB::table('components')
             ->join($specTable, "{$specTable}.component_id", '=', 'components.id')

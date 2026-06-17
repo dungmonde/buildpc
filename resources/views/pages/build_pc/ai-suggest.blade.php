@@ -25,7 +25,7 @@
                     <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">₫</span>
                     <input type="number" name="budget" id="budget" required min="3000000" step="500000" placeholder="" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition">
                 </div>
-                <p class="text-xs text-slate-500 mt-2">Ngân sách tối thiểu: 3.000.000đ</p>
+                <p class="text-xs text-slate-500 mt-2">Ngân sách tối thiểu: 5.000.000đ</p>
             </div>
 
             <div class="mb-8">
