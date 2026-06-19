@@ -20,3 +20,5 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan serve
+
+Nhập Groq api key vào cuối file env. để sử dụng tính năng AI

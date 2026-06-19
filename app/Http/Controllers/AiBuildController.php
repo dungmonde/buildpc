@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\Component;
 
 class AiBuildController extends Controller
@@ -66,7 +68,7 @@ EOT;
             ]);
 
             if (!$response->successful()) {
-                \Log::error('Groq API Error: ' . $response->body());
+                Log::error('Groq API Error: ' . $response->body());
                 if ($response->status() === 429) {
                     return back()->with('error', 'Hệ thống đang quá tải. Vui lòng chờ sau ít phút.');
                 }
@@ -247,10 +249,10 @@ EOT;
         
         // 5. Ultimate Fallback: Select the absolute cheapest compatible CPU in the database
         if (!$cpu) {
-            $cpu = \DB::table('components')
+            $cpu = DB::table('components')
                 ->join('cpus', 'cpus.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 1)
@@ -258,7 +260,7 @@ EOT;
                 ->whereIn('cpus.socket', function ($sub) {
                     $sub->select('socket')->from('motherboards');
                 })
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -268,7 +270,7 @@ EOT;
             $build['components']['cpu'] = ['id' => $cpu->id, 'name' => $cpu->name, 'price' => $price, 'image' => null];
             $build['total_price'] += $price;
             $remaining -= $price;
-            $cpuSpec = \DB::table('cpus')->where('component_id', $cpu->id)->first();
+            $cpuSpec = DB::table('cpus')->where('component_id', $cpu->id)->first();
             $socket  = $cpuSpec->socket ?? null;
             $cpuTdp  = $cpuSpec->tdp   ?? 65;
         }
@@ -325,16 +327,16 @@ EOT;
         
         // 5. Ultimate Fallback: Select the absolute cheapest compatible motherboard in the database
         if (!$mb && $socket) {
-            $mb = \DB::table('components')
+            $mb = DB::table('components')
                 ->join('motherboards', 'motherboards.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 5)
                 ->whereRaw("{$ep} > 0")
                 ->where('motherboards.socket', $socket)
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -344,7 +346,7 @@ EOT;
             $build['components']['mainboard'] = ['id' => $mb->id, 'name' => $mb->name, 'price' => $price, 'image' => null];
             $build['total_price'] += $price;
             $remaining -= $price;
-            $mbSpec = \DB::table('motherboards')->where('component_id', $mb->id)->first();
+            $mbSpec = DB::table('motherboards')->where('component_id', $mb->id)->first();
             $ddrGen = $mbSpec->ddr_gen ?? null;
         }
 
@@ -398,10 +400,10 @@ EOT;
         
         // 6. Ultimate Fallback: Select the absolute cheapest compatible RAM in the database
         if (!$ram) {
-            $ram = \DB::table('components')
+            $ram = DB::table('components')
                 ->join('memory', 'memory.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 3)
@@ -409,7 +411,7 @@ EOT;
                 ->when($ddrGen, function ($q) use ($ddrGen) {
                     $q->where('memory.ddr_gen', $ddrGen);
                 })
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -433,7 +435,7 @@ EOT;
                     $build['components']['vga'] = ['id' => $vga->id, 'name' => $vgaName, 'price' => $price, 'image' => null];
                     $build['total_price'] += $price;
                     $remaining -= $price;
-                    $vgaSpec = \DB::table('video_cards')->where('component_id', $vga->id)->first();
+                    $vgaSpec = DB::table('video_cards')->where('component_id', $vga->id)->first();
                     $vgaTdp  = $vgaSpec->tdp ?? 0;
                 }
             }
@@ -450,7 +452,7 @@ EOT;
                 $build['components']['vga'] = ['id' => $vga->id, 'name' => $vgaName, 'price' => $price, 'image' => null];
                 $build['total_price'] += $price;
                 $remaining -= $price;
-                $vgaSpec = \DB::table('video_cards')->where('component_id', $vga->id)->first();
+                $vgaSpec = DB::table('video_cards')->where('component_id', $vga->id)->first();
                 $vgaTdp  = $vgaSpec->tdp ?? 0;
             }
         }
@@ -537,29 +539,29 @@ EOT;
         
         // 9. Ultimate Fallback: Try cheapest SSD first, then any cheapest storage
         if (!$storage) {
-            $storage = \DB::table('components')
+            $storage = DB::table('components')
                 ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 4)
                 ->whereRaw("{$ep} > 0")
                 ->where('internal_hard_drives.type', 'SSD')
-                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
         if (!$storage) {
-            $storage = \DB::table('components')
+            $storage = DB::table('components')
                 ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 4)
                 ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -593,15 +595,15 @@ EOT;
         
         // 3. Ultimate Fallback: Select the absolute cheapest PSU in the database
         if (!$psu) {
-            $psu = \DB::table('components')
+            $psu = DB::table('components')
                 ->join('power_supplies', 'power_supplies.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 6)
                 ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -620,15 +622,15 @@ EOT;
         
         // Ultimate Fallback: Select the absolute cheapest case in the database
         if (!$case) {
-            $case = \DB::table('components')
+            $case = DB::table('components')
                 ->join('cases', 'cases.component_id', '=', 'components.id')
                 ->leftJoin(
-                    \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                     'cp.component_id', '=', 'components.id'
                 )
                 ->where('components.type_id', 8)
                 ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', \DB::raw("{$ep} as price"))
+                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
                 ->orderBy('price')
                 ->first();
         }
@@ -715,7 +717,7 @@ EOT;
         // 8.5. Nâng cấp Storage (đáp ứng dung lượng và loại tối thiểu của linh kiện hiện tại)
         if ($remaining >= 200000 && isset($build['components']['storage'])) {
             $currentStoragePrice = $build['components']['storage']['price'];
-            $currentStorageSpec = \DB::table('internal_hard_drives')->where('component_id', $build['components']['storage']['id'])->first();
+            $currentStorageSpec = DB::table('internal_hard_drives')->where('component_id', $build['components']['storage']['id'])->first();
             $currCapacity = $currentStorageSpec->capacity ?? $storageMin;
             $currType = $currentStorageSpec->type ?? 'SSD';
 
@@ -752,16 +754,16 @@ EOT;
             $selectExtra = ['internal_hard_drives.capacity', 'internal_hard_drives.type'];
         }
 
-        $q = \DB::table('components')
+        $q = DB::table('components')
             ->join($specTable, "{$specTable}.component_id", '=', 'components.id')
             ->leftJoin(
-                \DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', $typeId)
             ->whereRaw("{$ep} > 0")
             ->whereRaw("{$ep} <= ?", [$maxBudget])
-            ->select(array_merge(['components.id', 'components.name', \DB::raw("{$ep} as price")], $selectExtra));
+            ->select(array_merge(['components.id', 'components.name', DB::raw("{$ep} as price")], $selectExtra));
 
         if ($filter) $filter($q);
 

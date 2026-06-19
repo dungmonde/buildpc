@@ -50,7 +50,7 @@ class AdminComponentController extends Controller
     }
 
     // Form sửa linh kiện
-    public function edit($id)
+    public function edit(int $id)
     {
         $component = DB::table('components')
             ->join('component_types', 'components.type_id', '=', 'component_types.id')
@@ -66,7 +66,7 @@ class AdminComponentController extends Controller
     }
 
     // Cập nhật thông tin linh kiện
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
@@ -123,7 +123,7 @@ class AdminComponentController extends Controller
             ->with('success', 'Cập nhật linh kiện thành công!');
     }
 
-    private function saveComponentImage($image, $categorySlug, $componentId)
+    private function saveComponentImage(\Illuminate\Http\UploadedFile $image, string $categorySlug, int $componentId)
     {
         $folder = public_path('images/components/' . $categorySlug);
         if (!is_dir($folder)) {
@@ -188,7 +188,7 @@ class AdminComponentController extends Controller
     }
 
     // Xoá linh kiện
-    public function destroy($id)
+    public function destroy(int $id)
     {
         DB::table('components')->where('id', $id)->delete();
         $redirectTo = request('return_url', route('dashboard'));
@@ -201,7 +201,7 @@ class AdminComponentController extends Controller
     }
 
     // Form cập nhật giá (base_price)
-    public function editPrice($id)
+    public function editPrice(int $id)
     {
         $component = DB::table('components')->where('id', $id)->first();
         if (!$component) abort(404);
@@ -210,7 +210,7 @@ class AdminComponentController extends Controller
     }
 
     // Lưu giá mới vào base_price
-    public function updatePrice(Request $request, $id)
+    public function updatePrice(Request $request, int $id)
     {
         $validated = $request->validate([
             'price' => 'required|numeric|min:0',
@@ -226,7 +226,7 @@ class AdminComponentController extends Controller
             ->with('success', 'Cập nhật giá thành công!');
     }
 
-    private function syncComponentPrice($componentId, $price): void
+    private function syncComponentPrice(int $componentId, float $price): void
     {
         $priceRowId = DB::table('component_prices')
             ->where('component_id', $componentId)

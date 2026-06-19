@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class ComponentController extends Controller
 {
-    public function index(Request $request, $type)
+    public function index(Request $request, string $type)
     {
         $typeMap = [
             'cpu' => 1, 'gpu' => 2, 'ram' => 3, 'storage' => 4,
@@ -130,7 +130,7 @@ class ComponentController extends Controller
         return view('pages.components.index', compact('components', 'type', 'specRelation', 'dynamicFilters'));
     }
 
-    public function show($type, $id)
+    public function show(string $type, int $id)
     {
         $typeMap = [
             'cpu' => 1, 'gpu' => 2, 'ram' => 3, 'storage' => 4,

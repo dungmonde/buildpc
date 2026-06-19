@@ -114,7 +114,7 @@ class BuildController extends Controller
         }
     }
 
-    private function getComponentCategory($typeId): ?string
+    private function getComponentCategory(int $typeId): ?string
     {
         $typeMap = [
             1 => 'cpu',      // CPU
@@ -130,7 +130,7 @@ class BuildController extends Controller
         return $typeMap[$typeId] ?? null;
     }
 
-    public function switchSlot($slot)
+    public function switchSlot(int $slot)
     {
         $slot = (int) $slot;
         if ($slot < 1 || $slot > 10) {
@@ -154,7 +154,7 @@ class BuildController extends Controller
         return redirect()->route('build.index');
     }
 
-    public function select($category)
+    public function select(string $category)
     {
         $typeMap = [
             'cpu'         => 1,
@@ -263,7 +263,7 @@ class BuildController extends Controller
         return view('pages.build_pc.build-select', compact('items', 'category', 'category_name', 'filterMessage', 'recommendedWattage'));
     }
 
-    public function addComponent($category, $id)
+    public function addComponent(string $category, int $id)
     {
         $component = Component::with(['cheapestPrice', 'motherboard', 'gpu'])->findOrFail($id);
 
@@ -359,7 +359,7 @@ class BuildController extends Controller
         return $cleaned;
     }
 
-    public function removeComponent($category)
+    public function removeComponent(string $category)
     {
         $build = session()->get('build_pc', []);
 
@@ -447,7 +447,7 @@ class BuildController extends Controller
         return redirect()->route('build.index');
     }
 
-    public function deleteBuild($slot)
+    public function deleteBuild(int $slot)
     {
         $slot = (int) $slot;
         if ($slot < 1 || $slot > 10) {

@@ -20,15 +20,6 @@ class Post extends Model
         return $this->belongsTo(PcBuild::class, 'build_id');
     }
 
-    public function votes()
-    {
-        return $this->hasMany(Vote::class);
-    }
-
-    public function upvoteCount()
-    {
-        return $this->votes()->where('vote_type', 'up')->count();
-    }
 
     public function comments()
     {

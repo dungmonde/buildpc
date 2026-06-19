@@ -42,7 +42,7 @@ class ProfileController extends Controller
         return Redirect::route('profile.edit')->with('status', 'profile-updated');
     }
 
-    private function getUserAvatarUrl($user): ?string
+    private function getUserAvatarUrl(\App\Models\User $user): ?string
     {
         $extensions = ['jpg', 'jpeg', 'png', 'webp'];
         foreach ($extensions as $ext) {
@@ -55,7 +55,7 @@ class ProfileController extends Controller
         return null;
     }
 
-    private function saveUserAvatar(int $userId, $avatar)
+    private function saveUserAvatar(int $userId, \Illuminate\Http\UploadedFile $avatar)
     {
         $folder = public_path('images/user');
         if (!is_dir($folder)) {
