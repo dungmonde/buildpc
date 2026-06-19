@@ -790,46 +790,6 @@ COMMENT ON COLUMN public.video_cards.tdp IS 'Công suất tiêu thụ của VGA 
 
 
 --
--- TOC entry 259 (class 1259 OID 25772)
--- Name: votes; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.votes (
-    id bigint NOT NULL,
-    user_id bigint NOT NULL,
-    post_id bigint NOT NULL,
-    vote_type character varying(255) DEFAULT 'up'::character varying NOT NULL,
-    created_at timestamp(0) without time zone
-);
-
-
-ALTER TABLE public.votes OWNER TO postgres;
-
---
--- TOC entry 258 (class 1259 OID 25771)
--- Name: votes_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.votes_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.votes_id_seq OWNER TO postgres;
-
---
--- TOC entry 5320 (class 0 OID 0)
--- Dependencies: 258
--- Name: votes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.votes_id_seq OWNED BY public.votes.id;
-
-
---
 -- TOC entry 4987 (class 2604 OID 26112)
 -- Name: build_components id; Type: DEFAULT; Schema: public; Owner: postgres
 --
@@ -932,13 +892,6 @@ ALTER TABLE ONLY public.usage_profiles ALTER COLUMN id SET DEFAULT nextval('publ
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
 
-
---
--- TOC entry 4991 (class 2604 OID 26125)
--- Name: votes id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes ALTER COLUMN id SET DEFAULT nextval('public.votes_id_seq'::regclass);
 
 
 --
@@ -4120,7 +4073,6 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 18	2024_01_01_000015_create_pc_builds_table	1
 19	2024_01_01_000016_create_build_components_table	1
 20	2024_01_01_000017_create_posts_table	1
-21	2024_01_01_000018_create_votes_table	1
 22	2026_04_11_043027_add_role_to_users_table	2
 23	2026_04_12_043652_create_comments_table	3
 24	2026_06_15_093513_add_tdp_to_video_cards	4
@@ -4764,16 +4716,6 @@ COPY public.video_cards (component_id, chipset, memory, core_clock, boost_clock,
 
 
 --
--- TOC entry 5298 (class 0 OID 25772)
--- Dependencies: 259
--- Data for Name: votes; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-COPY public.votes (id, user_id, post_id, vote_type, created_at) FROM stdin;
-\.
-
-
---
 -- TOC entry 5321 (class 0 OID 0)
 -- Dependencies: 254
 -- Name: build_components_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
@@ -4889,14 +4831,6 @@ SELECT pg_catalog.setval('public.usage_profiles_id_seq', 1, false);
 
 SELECT pg_catalog.setval('public.users_id_seq', 9, true);
 
-
---
--- TOC entry 5334 (class 0 OID 0)
--- Dependencies: 258
--- Name: votes_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.votes_id_seq', 1, false);
 
 
 --
@@ -5180,31 +5114,10 @@ ALTER TABLE ONLY public.video_cards
 
 --
 -- TOC entry 5066 (class 2606 OID 25782)
--- Name: votes votes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_pkey PRIMARY KEY (id);
-
-
 --
 -- TOC entry 5068 (class 2606 OID 25811)
--- Name: votes votes_user_id_post_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_user_id_post_id_key UNIQUE (user_id, post_id);
-
-
 --
 -- TOC entry 5070 (class 2606 OID 25794)
--- Name: votes votes_user_id_post_id_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_user_id_post_id_unique UNIQUE (user_id, post_id);
-
-
 --
 -- TOC entry 5009 (class 1259 OID 25451)
 -- Name: cache_expiration_index; Type: INDEX; Schema: public; Owner: postgres
@@ -5255,12 +5168,6 @@ CREATE INDEX idx_prices_dealer ON public.component_prices USING btree (dealer_id
 
 --
 -- TOC entry 5064 (class 1259 OID 25816)
--- Name: idx_votes_post; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_votes_post ON public.votes USING btree (post_id);
-
-
 --
 -- TOC entry 5017 (class 1259 OID 25478)
 -- Name: jobs_queue_index; Type: INDEX; Schema: public; Owner: postgres
@@ -5611,40 +5518,12 @@ ALTER TABLE ONLY public.video_cards
 
 --
 -- TOC entry 5107 (class 2606 OID 25902)
--- Name: votes votes_post_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_post_id_fkey FOREIGN KEY (post_id) REFERENCES public.posts(id) ON DELETE CASCADE;
-
-
 --
 -- TOC entry 5108 (class 2606 OID 25788)
--- Name: votes votes_post_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_post_id_foreign FOREIGN KEY (post_id) REFERENCES public.posts(id) ON DELETE CASCADE;
-
-
 --
 -- TOC entry 5109 (class 2606 OID 25907)
--- Name: votes votes_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 --
 -- TOC entry 5110 (class 2606 OID 25783)
--- Name: votes votes_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.votes
-    ADD CONSTRAINT votes_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
 -- Completed on 2026-06-17 11:42:06
 
 --
