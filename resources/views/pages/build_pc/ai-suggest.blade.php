@@ -22,10 +22,13 @@
             <div class="mb-6">
                 <label for="budget" class="block text-sm font-semibold text-slate-700 mb-2">Ngân sách tối đa (VNĐ)</label>
                 <div class="relative">
-                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">₫</span>
-                    <input type="number" name="budget" id="budget" required min="3000000" step="500000" placeholder="" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition">
+                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium select-none">₫</span>
+                    <input type="number" name="budget" id="budget" required min="4500000" step="500000" class="w-full pr-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition" style="padding-left: 2.75rem;">
                 </div>
-                <p class="text-xs text-slate-500 mt-2">Ngân sách tối thiểu: 5.000.000đ</p>
+                <div class="flex justify-between items-center mt-2">
+                    <p class="text-xs text-slate-500">Ngân sách tối thiểu: 4.500.000đ</p>
+                    <p id="formatted-budget" class="text-xs font-bold text-emerald-600"></p>
+                </div>
             </div>
 
             <div class="mb-8">
@@ -39,13 +42,25 @@
 
             <div id="loading" class="hidden mt-6 text-center">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-slate-200 border-t-indigo-600 mb-2"></div>
-                <p class="text-slate-600 font-medium animate-pulse">Working</p>
+                <p class="text-slate-600 font-medium animate-pulse">Đang phân tích cấu hình...</p>
             </div>
         </form>
     </div>
 </div>
 
 <script>
+    const budgetInput = document.getElementById('budget');
+    const formattedBudget = document.getElementById('formatted-budget');
+
+    budgetInput.addEventListener('input', function() {
+        const val = parseFloat(this.value);
+        if (!isNaN(val) && val > 0) {
+            formattedBudget.textContent = new Intl.NumberFormat('vi-VN').format(val) + ' đ';
+        } else {
+            formattedBudget.textContent = '';
+        }
+    });
+
     document.getElementById('ai-form').addEventListener('submit', function() {
         document.getElementById('submit-btn').classList.add('hidden');
         document.getElementById('loading').classList.remove('hidden');

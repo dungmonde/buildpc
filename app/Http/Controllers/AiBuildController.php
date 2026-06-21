@@ -84,11 +84,27 @@ EOT;
             }
 
             $suggestedBuilds = [];
+            $isOverkill = false;
+            $originalBudget = $budget;
+            $confirmOverkill = $request->input('confirm_overkill') == '1';
+
             foreach ($aiResult['builds'] as $build) {
-                $suggestedBuilds[] = $this->assembleBuild($build, $budget);
+                $buildType = strtolower($build['build_type'] ?? 'gaming');
+                if ($buildType === 'office' && $budget > 15000000 && !$confirmOverkill) {
+                    $isOverkill = true;
+                    // Tối ưu ngân sách cho văn phòng xuống mức 15.000.000đ
+                    $suggestedBuilds[] = $this->assembleBuild($build, 15000000);
+                } else {
+                    if ($confirmOverkill && $buildType === 'office') {
+                        // Nâng cấp lên workstation để build cấu hình xịn có GPU
+                        $build['build_type'] = 'workstation';
+                        $build['title'] = ($build['title'] ?? 'Cấu hình Đề xuất') . ' (Tối đa Ngân sách)';
+                    }
+                    $suggestedBuilds[] = $this->assembleBuild($build, $budget);
+                }
             }
 
-            return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs'));
+            return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs', 'isOverkill', 'originalBudget'));
 
         } catch (\Exception $e) {
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());

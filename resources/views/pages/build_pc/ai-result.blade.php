@@ -9,6 +9,28 @@
         <p class="text-slate-600">Dựa trên ngân sách <strong class="text-slate-900">{{ number_format($budget) }}đ</strong> và nhu cầu của bạn.</p>
     </div>
 
+    @if(isset($isOverkill) && $isOverkill)
+        <div class="max-w-3xl mx-auto mb-10 bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-lg shadow-amber-50/20">
+            <div class="flex items-start gap-4">
+                <div class="text-amber-500 text-3xl"></div>
+                <div class="flex-1">
+                    <p class="text-amber-800 text-sm leading-relaxed">
+                        Thực tế, chỉ khoảng 15 triệu đã có thể đáp ứng được nhu cầu của bạn rất tốt, nên nếu bạn chỉ cần một chiếc máy giúp bạn làm tác vụ văn phòng cơ bản, thỉnh thoảng giải trí nhẹ nhàng thì cấu hình bên dưới sẽ tối ưu về giá hơn. Tuy nhiên, nếu bạn vẫn muốn tối ưu hết ngân sách của mình, hãy nhấn nút bên dưới để sử dụng hết ngân sách của bạn. 
+                        <form action="{{ route('ai.suggest.post') }}" method="POST" class="inline">
+                            @csrf
+                            <input type="hidden" name="budget" value="{{ $originalBudget }}">
+                            <input type="hidden" name="needs" value="{{ $needs }}">
+                            <input type="hidden" name="confirm_overkill" value="1">
+                            <button type="submit" class="font-bold text-amber-700 hover:text-amber-900 underline cursor-pointer bg-transparent border-0 p-0 inline-block align-baseline focus:outline-none">
+                                Xác nhận
+                            </button>
+                        </form>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="grid grid-cols-1 {{ count($suggestedBuilds) > 1 ? 'md:grid-cols-2' : 'max-w-3xl mx-auto' }} gap-8">
         @foreach($suggestedBuilds as $index => $build)
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
