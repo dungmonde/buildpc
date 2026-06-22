@@ -42,12 +42,18 @@
 
                 <div class="p-8 flex-1">
                     <h3 class="font-bold text-slate-900 mb-4 uppercase text-sm tracking-wide">Chi tiết linh kiện</h3>
+                    @php
+                        $imgMap = [
+                            'mainboard' => 'motherboard',
+                            'vga' => 'gpu',
+                        ];
+                    @endphp
                     <ul class="space-y-4">
                         @foreach($build['components'] as $cat => $comp)
                             <li class="flex items-center gap-4">
                                 <div class="w-12 h-12 bg-white rounded-lg border border-slate-200 p-1 flex items-center justify-center shrink-0">
                                     @if($comp['image'])
-                                        <img src="{{ asset('images/components/' . $cat . '/' . $comp['id'] . '.jpg') }}" onerror="this.src='https://via.placeholder.com/50'" class="max-w-full max-h-full object-contain">
+                                        <img src="{{ asset('images/components/' . ($imgMap[$cat] ?? $cat) . '/' . $comp['id'] . '.jpg') }}" onerror="this.src='https://via.placeholder.com/50'" class="max-w-full max-h-full object-contain">
                                     @else
                                         <span class="text-xs font-bold text-slate-400 uppercase">{{ substr($cat, 0, 3) }}</span>
                                     @endif
