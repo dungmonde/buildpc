@@ -11,6 +11,7 @@ use App\Helpers\TextCleaner;
 
 class AiBuildController extends Controller
 {
+    private $searchLimit = 15;
     public function index()
     {
         return view('pages.build_pc.ai-suggest');
@@ -26,32 +27,17 @@ class AiBuildController extends Controller
         try {
             $apiKey = env('GROQ_API_KEY');
         if (!$apiKey) {
-            return back()->with('error', 'Tính năng chưa được cấu hình (thiếu API Key trong file .env).');
+            return back()->with('error', 'Tính năng chưa được cấu hình (thiếu GROQ_API_KEY trong file .env).');
         }
 
         $budget = (float)$request->budget;
         $needs  = $request->needs;
-        $tools = [
-            [
-                'type' => 'function',
-                'function' => [
-                    'name' => 'get_store_catalog',
-                    'description' => 'Tra cứu toàn bộ danh sách các linh kiện thực tế đang có sẵn tại cửa hàng phù hợp với ngân sách.',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'budget' => ['type' => 'number', 'description' => 'Tổng ngân sách tối đa của khách hàng bằng VNĐ']
-                        ],
-                        'required' => ['budget']
-                    ]
-                ]
-            ]
-        ];
+        $catalog = $this->getStoreCatalog($budget, $needs);
 
         $messages = [
             [
                 'role' => 'system',
-                'content' => "Bạn là trợ lý tư vấn cấu hình PC chuyên nghiệp. Hãy sử dụng duy nhất công cụ get_store_catalog để tra cứu toàn bộ danh sách các linh kiện thực tế phù hợp với ngân sách của khách hàng. Sau khi nhận được danh sách linh kiện, bạn PHẢI chọn ra các linh kiện tương thích vật lý (CPU socket khớp Mainboard socket, RAM khớp DDR gen của Mainboard, PSU đủ công suất gánh CPU + VGA), tổng giá nằm trong ngân sách và trả về JSON cấu hình cuối cùng.\n\nFormat JSON cuối cùng bắt buộc (trả về JSON thuần túy, không có markdown):\n{\"builds\":[{\"title\":\"Tên cấu hình\",\"build_type\":\"gaming hoặc workstation hoặc office\",\"components\":{\"cpu\":ID_CPU,\"mainboard\":ID_MAINBOARD,\"ram\":ID_RAM,\"vga\":ID_VGA_OR_NULL,\"storage\":ID_STORAGE,\"psu\":ID_PSU,\"case\":ID_CASE},\"explanation\":\"Mô tả chung...\"}]}\n\nQuy tắc quan trọng cho phần 'explanation': KHÔNG được đề cập đến tên model hoặc hãng sản xuất cụ thể của linh kiện (như 'Core i3 12100F', 'GTX 1650', 'H610', 'Intel', 'AMD', 'Nvidia', v.v.) vào phần mô tả. Hãy viết mô tả hướng đến lợi ích, hiệu năng tổng thể và phân khúc của bộ máy (ví dụ: 'Cấu hình được trang bị bộ vi xử lý đa nhân thế hệ mới, card đồ họa rời mạnh mẽ, ổ cứng SSD tốc độ cao...'). Lý do là các linh kiện có thể được nâng cấp tự động sau đó để tối ưu ngân sách thừa."
+                'content' => "Bạn là AI tư vấn cấu hình PC chuyên nghiệp. Dưới đây là danh sách linh kiện thực tế đang có sẵn tại cửa hàng (giá 'price', các thông số 'socket', 'ddr_gen', 'tdp', 'wattage'):\n" . json_encode($catalog, JSON_UNESCAPED_UNICODE) . "\n\nNhiệm vụ của bạn là chọn ra 1 bộ máy TỐT NHẤT trong tầm giá và trả về JSON. Các quy tắc BẮT BUỘC (vi phạm sẽ bị từ chối):\n1. NGÂN SÁCH: Tổng giá trị (sum of price) của tất cả 7 linh kiện được chọn TUYỆT ĐỐI KHÔNG ĐƯỢC VƯỢT QUÁ ngân sách người dùng. Hãy tính toán cộng dồn thật kỹ.\n2. TƯƠNG THÍCH VẬT LÝ: CPU 'socket' PHẢI giống hệt Mainboard 'socket'. RAM 'ddr_gen' PHẢI giống hệt Mainboard 'ddr_gen'.\n3. NGUỒN ĐIỆN (PSU): PSU 'wattage' phải >= (CPU 'tdp' + VGA 'tdp' + 220W).\n4. VGA: Nhu cầu 'gaming'/'workstation' (ngân sách >= 9tr) BẮT BUỘC phải có VGA rời (không null). Nhu cầu 'văn phòng' luôn set VGA là null.\n\nFormat JSON bắt buộc:\n{\"builds\":[{\"title\":\"Tên cấu hình\",\"build_type\":\"gaming|workstation|office\",\"components\":{\"cpu\":ID,\"mainboard\":ID,\"ram\":ID,\"vga\":ID_hoặc_null,\"storage\":ID,\"psu\":ID,\"case\":ID},\"explanation\":\"Mô tả lợi ích, KHÔNG nhắc tên hãng/model linh kiện cụ thể\"}]}"
             ],
             [
                 'role' => 'user',
@@ -60,159 +46,72 @@ class AiBuildController extends Controller
         ];
 
         $aiResult = null;
-        $maxIterations = 3;
         $fallbackReason = null;
+        $model = 'llama-3.3-70b-versatile';
 
         try {
-            for ($iteration = 1; $iteration <= $maxIterations; $iteration++) {
-                $model = 'llama-3.3-70b-versatile';
-                
-                $response = Http::withoutVerifying()->withHeaders([
+            $maxRetries = 3;
+            $retryDelay = 2; // seconds
+            $response = null;
+
+            for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+                $response = Http::timeout(60)->withoutVerifying()->withHeaders([
                     'Content-Type' => 'application/json',
                     'Authorization' => 'Bearer ' . $apiKey,
                 ])->post('https://api.groq.com/openai/v1/chat/completions', [
-                    'model'       => $model,
-                    'messages'    => $messages,
-                    'tools'       => $tools,
-                    'tool_choice' => 'auto'
+                    'model'           => $model,
+                    'messages'        => $messages,
+                    'response_format' => ['type' => 'json_object'],
+                    'max_tokens'      => 2048
                 ]);
 
-                // Nếu rate limit 429, dùng model fallback
-                if ($response->status() === 429) {
-                    Log::warning("Groq API 429 for {$model} during agent loop. Retrying with llama-3.1-8b-instant...");
-                    $model = 'llama-3.1-8b-instant';
-                    $response = Http::withoutVerifying()->withHeaders([
-                        'Content-Type' => 'application/json',
-                        'Authorization' => 'Bearer ' . $apiKey,
-                    ])->post('https://api.groq.com/openai/v1/chat/completions', [
-                        'model'       => $model,
-                        'messages'    => $messages,
-                        'tools'       => $tools,
-                        'tool_choice' => 'auto'
-                    ]);
+                if ($response->status() === 429 && $attempt < $maxRetries) {
+                    Log::warning("Groq API returned 429. Retrying attempt {$attempt} after {$retryDelay}s...");
+                    sleep($retryDelay);
+                    $retryDelay *= 2; // exponential backoff
+                    continue;
                 }
 
-                if (!$response->successful()) {
-                    $fallbackReason = 'Groq API error status ' . $response->status() . ': ' . $response->body();
-                    Log::warning($fallbackReason);
-                    break;
-                }
+                break;
+            }
 
+            if (!$response->successful()) {
+                $fallbackReason = 'Groq API error status ' . $response->status() . ': ' . $response->body();
+                Log::warning($fallbackReason);
+            } else {
                 $data = $response->json();
-                $message = $data['choices'][0]['message'] ?? null;
-                if (!$message) {
-                    $fallbackReason = 'Empty message from API response';
-                    break;
-                }
-
-                $messages[] = $message;
-
-                if (!empty($message['tool_calls'])) {
-                    foreach ($message['tool_calls'] as $toolCall) {
-                        $toolName = $toolCall['function']['name'];
-                        $toolArgs = json_decode($toolCall['function']['arguments'], true) ?? [];
-                        $toolCallId = $toolCall['id'];
-
-                        $result = null;
-                        if ($toolName === 'get_store_catalog') {
-                            $result = $this->getStoreCatalog($toolArgs['budget'] ?? $budget);
-                        }
-
-                        $messages[] = [
-                            'role'         => 'tool',
-                            'tool_call_id' => $toolCallId,
-                            'name'         => $toolName,
-                            'content'      => json_encode($result, JSON_UNESCAPED_UNICODE)
-                        ];
-                    }
-                } else {
-                    $jsonStr = $message['content'] ?? '';
-                    if (preg_match('/\{.*\}/s', $jsonStr, $matches)) {
-                        $jsonStr = $matches[0];
-                    }
-                    $aiResult = json_decode(trim($jsonStr), true);
-                    if (!$aiResult || !isset($aiResult['builds'])) {
-                        $fallbackReason = 'Invalid JSON output from AI content: ' . $jsonStr;
-                    }
-                    break;
+                $content = $data['choices'][0]['message']['content'] ?? '';
+                $aiResult = json_decode(trim($content), true);
+                if (!$aiResult || !isset($aiResult['builds'])) {
+                    $fallbackReason = 'Invalid JSON output from AI: ' . $content;
                 }
             }
         } catch (\Exception $e) {
-            $fallbackReason = 'Exception in Agent loop: ' . $e->getMessage();
+            $fallbackReason = 'Exception in API call: ' . $e->getMessage();
             Log::error($fallbackReason);
         }
 
-        // Nếu không có kết quả từ AI hoặc kết quả không hợp lệ, thực hiện fallback sang PHP
+        // Thử bỏ fallback PHP để kiểm tra xem AI tự làm có được không
         if (!$aiResult || !isset($aiResult['builds']) || empty($aiResult['builds'])) {
-            Log::warning("AI Suggestion failed/invalid. Reason: " . ($fallbackReason ?? 'No builds returned') . ". Falling back to PHP assembler.");
-            
-            $needsLower = strtolower($needs);
-            $guessedBuildType = 'gaming';
-            if (str_contains($needsLower, 'văn phòng') || str_contains($needsLower, 'office') || str_contains($needsLower, 'học tập')) {
-                $guessedBuildType = 'office';
-            } elseif (str_contains($needsLower, 'đồ họa') || str_contains($needsLower, 'workstation') || str_contains($needsLower, 'render') || str_contains($needsLower, 'lập trình')) {
-                $guessedBuildType = 'workstation';
-            }
-
-            $guessedCpuBrand = 'any';
-            if (str_contains($needsLower, 'intel')) {
-                $guessedCpuBrand = 'intel';
-            } elseif (str_contains($needsLower, 'amd') || str_contains($needsLower, 'ryzen')) {
-                $guessedCpuBrand = 'amd';
-            }
-
-            $guessedExplanation = 'Cấu hình tối ưu được thiết kế để đáp ứng mượt mà nhu cầu giải trí và công việc hàng ngày của bạn.';
-            if ($guessedBuildType === 'gaming') {
-                $guessedExplanation = 'Cấu hình gaming tối ưu hiệu năng trên giá thành với bộ vi xử lý đa nhân mạnh mẽ và card đồ họa rời chuyên dụng, giúp bạn chiến mượt mà các tựa game phổ biến.';
-            } elseif ($guessedBuildType === 'workstation') {
-                $guessedExplanation = 'Cấu hình tối ưu cho công việc đồ họa, render, lập trình và đa nhiệm hiệu năng cao với CPU nhiều nhân, dung lượng RAM lớn và ổ cứng SSD siêu tốc.';
-            } elseif ($guessedBuildType === 'office') {
-                $guessedExplanation = 'Cấu hình văn phòng và học tập mượt mà, khởi động cực nhanh và vận hành bền bỉ, tiết kiệm điện năng.';
-            }
-
-            $aiResult = [
-                'builds' => [
-                    [
-                        'title' => 'Cấu hình Đề xuất (Tối ưu tự động)',
-                        'build_type' => $guessedBuildType,
-                        'cpu_brand' => $guessedCpuBrand,
-                        'explanation' => $guessedExplanation,
-                        'components' => [], // Empty components to force fallback path
-                    ]
-                ]
-            ];
+            return back()->with('error', 'Lỗi phản hồi từ AI: ' . ($fallbackReason ?? 'JSON không hợp lệ hoặc rỗng.'));
         }
 
         $suggestedBuilds = [];
-        $isOverkill = false;
         $originalBudget = $budget;
-        $confirmOverkill = $request->input('confirm_overkill') == '1';
+        $aiSuccess = false;
 
+        if ($aiResult && isset($aiResult['builds']) && !empty($aiResult['builds'])) {
             foreach ($aiResult['builds'] as $build) {
-                // Làm sạch tiếng Trung/chữ Hán nếu có trong phần text
-                if (isset($build['explanation'])) {
-                    $build['explanation'] = TextCleaner::cleanCjk($build['explanation']);
-                }
-                if (isset($build['title'])) {
-                    $build['title'] = TextCleaner::cleanCjk($build['title']);
-                }
+            if (isset($build['explanation'])) {
+                $build['explanation'] = TextCleaner::cleanCjk($build['explanation']);
+            }
+            if (isset($build['title'])) {
+                $build['title'] = TextCleaner::cleanCjk($build['title']);
+            }
 
-                $buildType = strtolower($build['build_type'] ?? 'gaming');
-                if ($buildType === 'office' && $budget > 15000000 && !$confirmOverkill) {
-                    $isOverkill = true;
-                    // Tối ưu ngân sách cho văn phòng xuống mức 15.000.000đ và chạy thuật toán cũ
-                    $fallbackBuild = $this->assembleBuild($build, 15000000);
-                    $fallbackBuild['source'] = 'php_fallback';
-                    $suggestedBuilds[] = $fallbackBuild;
-                } else {
-                    if ($confirmOverkill && $buildType === 'office') {
-                        // Nâng cấp lên workstation để build cấu hình xịn có GPU
-                        $build['build_type'] = 'workstation';
-                        $build['title'] = ($build['title'] ?? 'Cấu hình Đề xuất') . ' (Tối đa Ngân sách)';
-                        $buildType = 'workstation';
-                    }
-                    
-                    // Thử lấy linh kiện thực tế theo lựa chọn của AI
+            $buildType = strtolower($build['build_type'] ?? 'gaming');
+            
+            // Thử lấy linh kiện thực tế theo lựa chọn của AI
                     $selectedIds = $build['components'] ?? [];
                     $components = [];
                     $totalPrice = 0;
@@ -220,30 +119,59 @@ class AiBuildController extends Controller
                     $hasAllRequired = true;
 
                     foreach ($requiredTypes as $type) {
-                        if (empty($selectedIds[$type]) || !is_numeric($selectedIds[$type])) {
-                            $hasAllRequired = false;
-                            break;
-                        }
                         $table = $type === 'ram' ? 'memory' : ($type === 'storage' ? 'internal_hard_drives' : ($type === 'psu' ? 'power_supplies' : ($type === 'case' ? 'cases' : ($type === 'mainboard' ? 'motherboards' : 'cpus'))));
+                        $typeId = $type === 'ram' ? 3 : ($type === 'storage' ? 4 : ($type === 'psu' ? 6 : ($type === 'case' ? 8 : ($type === 'mainboard' ? 5 : 1))));
                         
-                        $compObj = DB::table('components')
-                            ->join($table, "{$table}.component_id", '=', 'components.id')
-                            ->leftJoin(
-                                DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                                'cp.component_id', '=', 'components.id'
-                            )
-                            ->where('components.id', $selectedIds[$type])
-                            ->select('components.id', 'components.name', DB::raw('COALESCE(components.base_price, cp.price) as price'))
-                            ->first();
+                        $selectCols = ['components.id', 'components.name', DB::raw('COALESCE(components.base_price, cp.price) as price')];
+                        if ($type === 'storage') {
+                            $selectCols[] = 'internal_hard_drives.capacity';
+                            $selectCols[] = 'internal_hard_drives.type';
+                        } elseif ($type === 'psu') {
+                            $selectCols[] = 'power_supplies.wattage';
+                        }
+
+                        $id = $selectedIds[$type] ?? null;
+                        $compObj = null;
+                        if ($id && is_numeric($id)) {
+                            $compObj = DB::table('components')
+                                ->join($table, "{$table}.component_id", '=', 'components.id')
+                                ->leftJoin(
+                                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                                    'cp.component_id', '=', 'components.id'
+                                )
+                                ->where('components.id', $id)
+                                ->select($selectCols)
+                                ->first();
+                        }
+
+                        // Auto-Correct if missing, invalid, or price is 0
+                        if (!$compObj || !(float)$compObj->price) {
+                            $compObj = $this->pickByBudget($typeId, $table, 5000000, null, true);
+                        }
 
                         if (!$compObj || !(float)$compObj->price) {
                             $hasAllRequired = false;
                             break;
                         }
 
+                        // Ensure selectedIds is updated with the corrected ID
+                        $selectedIds[$type] = $compObj->id;
+
+                        $compName = $compObj->name;
+                        if ($type === 'storage') {
+                            $capStr = ($compObj->capacity >= 1000) ? (($compObj->capacity / 1000) . 'TB') : ($compObj->capacity . 'GB');
+                            if (!empty($compObj->capacity) && !empty($compObj->type)) {
+                                $compName .= ' (' . $capStr . ' ' . $compObj->type . ')';
+                            }
+                        } elseif ($type === 'psu') {
+                            if (!empty($compObj->wattage)) {
+                                $compName .= ' (' . $compObj->wattage . 'W)';
+                            }
+                        }
+
                         $components[$type] = [
                             'id' => $compObj->id,
-                            'name' => $compObj->name,
+                            'name' => $compName,
                             'price' => (float)$compObj->price,
                             'image' => true,
                         ];
@@ -259,13 +187,14 @@ class AiBuildController extends Controller
                                 'cp.component_id', '=', 'components.id'
                             )
                             ->where('components.id', $selectedIds['vga'])
-                            ->select('components.id', 'components.name', DB::raw('COALESCE(components.base_price, cp.price) as price'))
+                            ->select('components.id', 'components.name', 'video_cards.chipset', DB::raw('COALESCE(components.base_price, cp.price) as price'))
                             ->first();
 
                         if ($compObj && (float)$compObj->price) {
+                            $vgaName = $compObj->name . (!empty($compObj->chipset) ? ' (' . $compObj->chipset . ')' : '');
                             $components['vga'] = [
                                 'id' => $compObj->id,
-                                'name' => $compObj->name,
+                                'name' => $vgaName,
                                 'price' => (float)$compObj->price,
                                 'image' => true,
                             ];
@@ -275,6 +204,7 @@ class AiBuildController extends Controller
 
                     // Xác thực tính tương thích vật lý bằng PHP
                     $isCompatible = true;
+                    $incompatibilities = [];
                     if ($hasAllRequired) {
                         $cpuSpec = DB::table('cpus')->where('component_id', $selectedIds['cpu'])->first();
                         $mbSpec  = DB::table('motherboards')->where('component_id', $selectedIds['mainboard'])->first();
@@ -296,18 +226,90 @@ class AiBuildController extends Controller
 
                         // 1. Kiểm tra Socket CPU và Motherboard
                         if ($cpuSocket && $mbSocket && strtolower($cpuSocket) !== strtolower($mbSocket)) {
-                            $isCompatible = false;
+                            // AUTO CORRECT: Đổi Mainboard để khớp Socket CPU
+                            $correctedMb = $this->pickByBudget(5, 'motherboards', 5000000, function ($q) use ($cpuSocket) {
+                                $q->where('motherboards.socket', $cpuSocket);
+                            }, true);
+
+                            if ($correctedMb) {
+                                $totalPrice -= $components['mainboard']['price'];
+                                $components['mainboard'] = [
+                                    'id' => $correctedMb->id,
+                                    'name' => $correctedMb->name,
+                                    'price' => (float)$correctedMb->price,
+                                    'image' => true,
+                                ];
+                                $totalPrice += (float)$correctedMb->price;
+                                $selectedIds['mainboard'] = $correctedMb->id;
+                                $mbSpec = DB::table('motherboards')->where('component_id', $correctedMb->id)->first();
+                                $mbSocket = $mbSpec->socket ?? null;
+                                $mbDdr = $mbSpec->ddr_gen ?? null;
+                            } else {
+                                $isCompatible = false;
+                                $incompatibilities[] = "Socket lệch (CPU: $cpuSocket vs Main: $mbSocket)";
+                            }
                         }
                         
                         // 2. Kiểm tra thế hệ DDR của Motherboard và RAM
                         if ($mbDdr && $ramDdr && (int)$mbDdr !== (int)$ramDdr) {
-                            $isCompatible = false;
+                            // AUTO CORRECT: Đổi RAM để khớp DDR Mainboard
+                            $ramCapacity = $ramSpec->capacity ?? 8;
+                            
+                            $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($ramCapacity, $mbDdr) {
+                                $q->where('memory.capacity', '>=', $ramCapacity);
+                                $q->where('memory.ddr_gen', $mbDdr);
+                            }, true);
+                            
+                            if (!$correctedRam) {
+                                $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($mbDdr) {
+                                    $q->where('memory.ddr_gen', $mbDdr);
+                                }, true);
+                            }
+
+                            if ($correctedRam) {
+                                $totalPrice -= $components['ram']['price'];
+                                $components['ram'] = [
+                                    'id' => $correctedRam->id,
+                                    'name' => $correctedRam->name,
+                                    'price' => (float)$correctedRam->price,
+                                    'image' => true,
+                                ];
+                                $totalPrice += (float)$correctedRam->price;
+                                $selectedIds['ram'] = $correctedRam->id;
+                                $ramDdr = $mbDdr;
+                            } else {
+                                $isCompatible = false;
+                                $incompatibilities[] = "DDR lệch (Main: DDR$mbDdr vs RAM: DDR$ramDdr)";
+                            }
                         }
 
                         // 3. Kiểm tra công suất nguồn đủ tải (CPU + VGA + hao phí)
                         $requiredWatt = $cpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
                         if ($psuWatt && $psuWatt < $requiredWatt) {
-                            $isCompatible = false;
+                            // AUTO CORRECT: Đổi PSU cho đủ công suất
+                            $correctedPsu = $this->pickByBudget(6, 'power_supplies', 5000000, function ($q) use ($requiredWatt) {
+                                $q->where('power_supplies.wattage', '>=', $requiredWatt);
+                            }, true);
+
+                            if ($correctedPsu) {
+                                $totalPrice -= $components['psu']['price'];
+                                $psuSpecNew = DB::table('power_supplies')->where('component_id', $correctedPsu->id)->first();
+                                $psuWattNew = $psuSpecNew->wattage ?? 0;
+                                $psuName = $correctedPsu->name . ($psuWattNew ? " ({$psuWattNew}W)" : '');
+                                
+                                $components['psu'] = [
+                                    'id' => $correctedPsu->id,
+                                    'name' => $psuName,
+                                    'price' => (float)$correctedPsu->price,
+                                    'image' => true,
+                                ];
+                                $totalPrice += (float)$correctedPsu->price;
+                                $selectedIds['psu'] = $correctedPsu->id;
+                                $psuWatt = $psuWattNew;
+                            } else {
+                                $isCompatible = false;
+                                $incompatibilities[] = "Nguồn quá yếu (PSU: {$psuWatt}W < Yêu cầu: {$requiredWatt}W)";
+                            }
                         }
 
                         // 4. Kiểm tra loại trừ chipset Mainboard giá rẻ với CPU dòng cao
@@ -338,6 +340,7 @@ class AiBuildController extends Controller
                                 foreach ($badChipsets as $chip) {
                                     if (str_contains($mbNameVal, $chip)) {
                                         $isCompatible = false;
+                                        $incompatibilities[] = "Chipset rẻ tiền ($chip) nghẽn cổ chai CPU dòng cao cấp";
                                         break;
                                     }
                                 }
@@ -345,8 +348,7 @@ class AiBuildController extends Controller
                         }
                     }
 
-                    // Nếu AI chọn đúng, tương thích và đủ linh kiện có thật dưới ngân sách (cho phép sai số 5% vượt ngân sách)
-                    if ($hasAllRequired && $isCompatible && $totalPrice <= ($budget * 1.05)) {
+                    if ($hasAllRequired && $isCompatible && $totalPrice <= ($budget * 1.10)) {
                         $aiBuild = [
                             'title' => $build['title'] ?? 'Cấu hình Đề xuất',
                             'explanation' => $build['explanation'] ?? '',
@@ -371,16 +373,54 @@ class AiBuildController extends Controller
                         $aiBuild['components'] = $orderedComponents;
 
                         $suggestedBuilds[] = $aiBuild;
+                        $aiSuccess = true;
                     } else {
-                        // Fallback về thuật toán phân bổ PHP nếu AI chọn sai linh kiện, không tương thích hoặc vượt quá nhiều ngân sách
-                        $fallbackBuild = $this->assembleBuild($build, $budget);
-                        $fallbackBuild['source'] = 'php_fallback';
-                        $suggestedBuilds[] = $fallbackBuild;
+                        // AI build bị từ chối, ghi nhận lý do để fallback
+                        $reasons = [];
+                        if (!$hasAllRequired) $reasons[] = 'Thiếu linh kiện bắt buộc';
+                        if (isset($isCompatible) && !$isCompatible) {
+                            $reasons[] = 'Linh kiện không tương thích vật lý: [' . implode(' | ', $incompatibilities) . ']';
+                        }
+                        if ($totalPrice > ($budget * 1.10)) $reasons[] = 'Tổng giá vượt ngân sách sau khi Auto-Correct (' . number_format($totalPrice) . 'đ > ' . number_format($budget * 1.10) . 'đ)';
+                        
+                        // Disable fallback: return error directly
+                        return back()->with('error', 'Cấu hình AI chọn bị từ chối do: ' . implode(', ', $reasons));
                     }
-                }
+            }
+        }
+
+        /*
+        // Kích hoạt PHP Fallback nếu AI thất bại
+        if (!$aiSuccess) {
+            $needsLower = strtolower($needs);
+            $buildType = 'gaming';
+            if (str_contains($needsLower, 'văn phòng') || str_contains($needsLower, 'office') || str_contains($needsLower, 'học tập') || str_contains($needsLower, 'gia đình')) {
+                $buildType = 'office';
+            } elseif (str_contains($needsLower, 'workstation') || str_contains($needsLower, 'đồ họa') || str_contains($needsLower, 'render') || str_contains($needsLower, 'kiến trúc')) {
+                $buildType = 'workstation';
             }
 
-            return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs', 'isOverkill', 'originalBudget'));
+            $cpuBrand = 'any';
+            if (str_contains($needsLower, 'intel') || str_contains($needsLower, 'core i') || str_contains($needsLower, 'pentium')) {
+                $cpuBrand = 'intel';
+            } elseif (str_contains($needsLower, 'amd') || str_contains($needsLower, 'ryzen')) {
+                $cpuBrand = 'amd';
+            }
+
+            $fallbackIntent = [
+                'build_type'  => $buildType,
+                'cpu_brand'   => $cpuBrand,
+                'title'       => 'Cấu hình Đề xuất (Hệ thống Phân tích)',
+                'explanation' => 'Đây là cấu hình tối ưu nhất được tính toán bởi thuật toán cục bộ của chúng tôi dựa trên mức giá hiện tại.',
+            ];
+
+            $fallbackBuild = \App\Http\Controllers\PHPBuildFallback::assembleBuild($this, $fallbackIntent, $budget);
+            $fallbackBuild['source'] = 'php_fallback';
+            $suggestedBuilds[] = $fallbackBuild;
+        }
+        */
+
+        return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs', 'originalBudget'));
 
         } catch (\Exception $e) {
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
@@ -388,579 +428,9 @@ class AiBuildController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // CORE: Lắp ráp cấu hình từ template ngân sách — PHP kiểm soát 100%
-    // ─────────────────────────────────────────────────────────────────────────
-    private function assembleBuild(array $intent, float $budget): array
-    {
-        $buildType = strtolower($intent['build_type'] ?? 'gaming');
-        $cpuBrand  = strtolower($intent['cpu_brand']  ?? 'any');
-        $needsGpu  = in_array($buildType, ['gaming', 'workstation']) && $budget >= 9000000;
-
-        $build = [
-            'title'            => $intent['title']       ?? 'Cấu hình Đề xuất',
-            'explanation'      => $intent['explanation'] ?? '',
-            'budget_allocated' => $budget,
-            'components'       => [],
-            'total_price'      => 0,
-        ];
-
-        // ── Phân bổ ngân sách theo template ──────────────────────────────────
-        if ($needsGpu) {
-            $alloc = [
-                'vga'       => $budget * 0.38,
-                'cpu'       => $budget * 0.22,
-                'mainboard' => max($budget * 0.16, 1500000),
-                'ram'       => max($budget * 0.12, 1000000),
-                'storage'   => max($budget * 0.07, 900000),
-                'psu'       => max($budget * 0.04, 750000),
-                'case'      => max($budget * 0.03, 500000),
-            ];
-            $floors = [
-                'vga'       => 1500000,
-                'cpu'       => 1500000,
-                'mainboard' => 1350000,
-                'ram'       => 850000,
-                'storage'   => 800000,
-                'psu'       => 700000,
-                'case'      => 599000,
-            ];
-        } else {
-            $alloc = [
-                'cpu'       => $budget * 0.32,
-                'mainboard' => max($budget * 0.25, 1300000),
-                'ram'       => max($budget * 0.20, 800000),
-                'storage'   => max($budget * 0.13, 800000),
-                'psu'       => max($budget * 0.06, 600000),
-                'case'      => max($budget * 0.04, 400000),
-                'vga'       => 0,
-            ];
-            $floors = [
-                'cpu'       => 1200000,
-                'mainboard' => 1150000,
-                'ram'       => 700000,
-                'storage'   => 700000,
-                'psu'       => 550000,
-                'case'      => 599000,
-                'vga'       => 0,
-            ];
-        }
-
-        // Normalize: nếu tổng alloc vượt budget, co lại theo tỷ lệ (nhưng giữ các linh kiện ở mức tối thiểu an toàn)
-        $totalAlloc = array_sum($alloc);
-        if ($totalAlloc > $budget) {
-            $excess = $totalAlloc - $budget;
-            // Giảm theo thứ tự ưu tiên ngược để bảo toàn tính tương thích
-            foreach (['vga', 'mainboard', 'cpu', 'ram', 'storage', 'psu', 'case'] as $slot) {
-                if (!isset($alloc[$slot]) || $alloc[$slot] <= 0) continue;
-                $floorPrice = $floors[$slot] ?? 500000;
-                $cut = min($excess, max(0, $alloc[$slot] - $floorPrice));
-                $alloc[$slot] -= $cut;
-                $excess -= $cut;
-                if ($excess <= 0) break;
-            }
-        }
-
-        $remaining = $budget;
-        $ep        = 'COALESCE(components.base_price, cp.price)';
-        $socket    = null;
-        $ddrGen    = null;
-        $cpuTdp    = 65;
-        $vgaTdp    = 0;
-
-        // Helper to sum floors of remaining components to avoid overspending in fallbacks
-        $remainingFloors = function (array $slots) use ($floors, $alloc) {
-            $sum = 0;
-            foreach ($slots as $slot) {
-                if (isset($alloc[$slot]) && $alloc[$slot] > 0) {
-                    $sum += $floors[$slot] ?? 500000;
-                }
-            }
-            return $sum;
-        };
-
-        // ── 1. CPU ────────────────────────────────────────────────────────────
-        $cpuMin = $needsGpu ? 1200000 : 0;
-        $reserve = $remainingFloors(['mainboard', 'ram', 'vga', 'storage', 'psu', 'case']);
-        $cpuMax = min($alloc['cpu'], $remaining - $reserve);
-
-        // Subquery helper to make sure picked CPU has at least one matching motherboard in the DB
-        $hasMb = function ($q) use ($budget) {
-            $q->whereIn('cpus.socket', function ($sub) use ($budget) {
-                $sub->select('socket')->from('motherboards');
-                if ($budget < 12000000) {
-                    $sub->where('socket', '!=', 'AM5');
-                }
-            });
-        };
-
-        // 0. Try AMD X3D CPU first for gaming builds if brand is AMD or any
-        $cpu = null;
-        if ($buildType === 'gaming' && in_array($cpuBrand, ['amd', 'any'])) {
-            $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuMin, $ep, $hasMb) {
-                $q->whereRaw('LOWER(components.name) LIKE ?', ['%x3d%']);
-                if ($cpuMin > 0) $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                $hasMb($q);
-            });
-        }
-
-        // 1. Try with requested brand within cpuMax
-        if (!$cpu) {
-            $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb) {
-                if ($cpuBrand !== 'any') $q->whereRaw('LOWER(components.name) LIKE ?', ['%' . strtolower($cpuBrand) . '%']);
-                if ($cpuMin > 0)        $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                $hasMb($q);
-            });
-        }
-        
-        // 2. Fallback: Try with any brand within cpuMax
-        if (!$cpu && $cpuBrand !== 'any') {
-            $cpu = $this->pickByBudget(1, 'cpus', $cpuMax, function ($q) use ($cpuMin, $ep, $hasMb) {
-                if ($cpuMin > 0) $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                $hasMb($q);
-            });
-        }
-        
-        // 3. Fallback: Try with requested brand up to remaining budget (reserving other slots)
-        if (!$cpu) {
-            $cpuLimit = max($cpuMax, $remaining - $reserve);
-            $cpu = $this->pickByBudget(1, 'cpus', $cpuLimit, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb) {
-                if ($cpuBrand !== 'any') $q->whereRaw('LOWER(components.name) LIKE ?', ['%' . strtolower($cpuBrand) . '%']);
-                if ($cpuMin > 0)        $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                $hasMb($q);
-            }, true);
-        }
-        
-        // 4. Fallback: Try with any brand up to remaining budget (reserving other slots)
-        if (!$cpu) {
-            $cpuLimit = max($cpuMax, $remaining - $reserve);
-            $cpu = $this->pickByBudget(1, 'cpus', $cpuLimit, function ($q) use ($cpuMin, $ep, $hasMb) {
-                if ($cpuMin > 0) $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                $hasMb($q);
-            }, true);
-        }
-        
-        // 5. Ultimate Fallback: Select the absolute cheapest compatible CPU in the database
-        if (!$cpu) {
-            $cpu = DB::table('components')
-                ->join('cpus', 'cpus.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 1)
-                ->whereRaw("{$ep} > 0")
-                ->whereIn('cpus.socket', function ($sub) {
-                    $sub->select('socket')->from('motherboards');
-                })
-                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-
-        if ($cpu) {
-            $price = (float)$cpu->price;
-            $build['components']['cpu'] = ['id' => $cpu->id, 'name' => $cpu->name, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-            $cpuSpec = DB::table('cpus')->where('component_id', $cpu->id)->first();
-            $socket  = $cpuSpec->socket ?? null;
-            $cpuTdp  = $cpuSpec->tdp   ?? 65;
-        }
-
-        // ── 2. MAINBOARD ──────────────────────────────────────────────────────
-        $cpuPrice = isset($cpu) ? (float)$cpu->price : 0;
-        $cpuName  = isset($cpu) ? strtolower($cpu->name) : '';
-        $isHighEndCpu = ($cpuPrice > 4000000)
-            || preg_match('/\b(k|kf|ks|x3d)\b/i', $cpuName)
-            || str_contains($cpuName, 'ryzen 7')
-            || str_contains($cpuName, 'ryzen 9')
-            || str_contains($cpuName, 'i7-')
-            || str_contains($cpuName, 'i9-');
-
-        $excludedChipsets = [];
-        if ($cpuPrice > 9000000) {
-            $excludedChipsets = ['A320','A620','H610','B450','H510','H410','B460','B560','H610','H710'];
-        } elseif ($isHighEndCpu) {
-            $excludedChipsets = ['A320','A620','H610','H510','H410'];
-        } elseif ($cpuPrice > 0 && $cpuPrice < 3000000) {
-            // Budget CPU: exclude expensive/mid-range chipsets to prioritize cheaper ones
-            $excludedChipsets = ['B550', 'X570', 'B650', 'X670', 'B660', 'B760', 'Z690', 'Z790', 'H770', 'Z890', 'B850', 'X870'];
-        }
-        $reserve = $remainingFloors(['ram', 'vga', 'storage', 'psu', 'case']);
-        $mbMax = min($alloc['mainboard'], $remaining - $reserve);
-        
-        // 1. Try with chipset filter within mbMax
-        $mb = $this->pickByBudget(5, 'motherboards', $mbMax, function ($q) use ($socket, $excludedChipsets) {
-            if ($socket) $q->where('motherboards.socket', $socket);
-            foreach ($excludedChipsets as $chip) {
-                $q->whereRaw('LOWER(components.name) NOT LIKE ?', ['%' . strtolower($chip) . '%']);
-            }
-        });
-        
-        // 2. Fallback: Skip chipset filter within mbMax
-        if (!$mb && $socket) {
-            $mb = $this->pickByBudget(5, 'motherboards', $mbMax, function ($q) use ($socket) {
-                $q->where('motherboards.socket', $socket);
-            });
-        }
-        
-        // 3. Fallback: Try with chipset filter up to remaining budget (reserving other slots)
-        if (!$mb && $socket) {
-            $reserve = $remainingFloors(['ram', 'vga', 'storage', 'psu', 'case']);
-            $mbLimit = max($mbMax, $remaining - $reserve);
-            $mb = $this->pickByBudget(5, 'motherboards', $mbLimit, function ($q) use ($socket, $excludedChipsets) {
-                $q->where('motherboards.socket', $socket);
-                foreach ($excludedChipsets as $chip) {
-                    $q->whereRaw('LOWER(components.name) NOT LIKE ?', ['%' . strtolower($chip) . '%']);
-                }
-            }, true);
-        }
-        
-        // 4. Fallback: Skip chipset filter up to remaining budget (reserving other slots)
-        if (!$mb && $socket) {
-            $reserve = $remainingFloors(['ram', 'vga', 'storage', 'psu', 'case']);
-            $mbLimit = max($mbMax, $remaining - $reserve);
-            $mb = $this->pickByBudget(5, 'motherboards', $mbLimit, function ($q) use ($socket) {
-                $q->where('motherboards.socket', $socket);
-            }, true);
-        }
-        
-        // 5. Ultimate Fallback: Select the absolute cheapest compatible motherboard in the database
-        if (!$mb && $socket) {
-            $mb = DB::table('components')
-                ->join('motherboards', 'motherboards.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 5)
-                ->whereRaw("{$ep} > 0")
-                ->where('motherboards.socket', $socket)
-                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-        
-        if ($mb) {
-            $price = (float)$mb->price;
-            $build['components']['mainboard'] = ['id' => $mb->id, 'name' => $mb->name, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-            $mbSpec = DB::table('motherboards')->where('component_id', $mb->id)->first();
-            $ddrGen = $mbSpec->ddr_gen ?? null;
-        }
-
-        // ── 3. RAM ────────────────────────────────────────────────────────────
-        $ramCapacity = $needsGpu ? 16 : 8;
-        $reserve = $remainingFloors(['vga', 'storage', 'psu', 'case']);
-        $ramMax      = min($alloc['ram'], $remaining - $reserve);
-        
-        // 1. Try with target capacity and DDR gen within ramMax
-        $ram = $this->pickByBudget(3, 'memory', $ramMax, function ($q) use ($ramCapacity, $ddrGen) {
-            $q->where('memory.capacity', '>=', $ramCapacity);
-            if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-        });
-        
-        // 2. Fallback: Try with target capacity and DDR gen up to remaining budget (reserving other slots)
-        if (!$ram) {
-            $reserve = $remainingFloors(['vga', 'storage', 'psu', 'case']);
-            $ramLimit = max($ramMax, $remaining - $reserve);
-            $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) use ($ramCapacity, $ddrGen) {
-                $q->where('memory.capacity', '>=', $ramCapacity);
-                if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-            }, true);
-        }
-        
-        // 3. Fallback: Lower capacity to 8GB (for gaming) within ramMax
-        if (!$ram && $ramCapacity > 8) {
-            $ram = $this->pickByBudget(3, 'memory', $ramMax, function ($q) use ($ddrGen) {
-                $q->where('memory.capacity', '>=', 8);
-                if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-            });
-        }
-        
-        // 4. Fallback: Lower capacity to 8GB (for gaming) up to remaining budget (reserving other slots)
-        if (!$ram && $ramCapacity > 8) {
-            $reserve = $remainingFloors(['vga', 'storage', 'psu', 'case']);
-            $ramLimit = max($ramMax, $remaining - $reserve);
-            $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) use ($ddrGen) {
-                $q->where('memory.capacity', '>=', 8);
-                if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-            }, true);
-        }
-        
-        // 5. Fallback: Lower capacity to 4GB up to remaining budget (reserving other slots), skipping DDR check if needed
-        if (!$ram) {
-            $reserve = $remainingFloors(['vga', 'storage', 'psu', 'case']);
-            $ramLimit = max($ramMax, $remaining - $reserve);
-            $ram = $this->pickByBudget(3, 'memory', $ramLimit, function ($q) {
-                $q->where('memory.capacity', '>=', 4);
-            }, true);
-        }
-        
-        // 6. Ultimate Fallback: Select the absolute cheapest compatible RAM in the database
-        if (!$ram) {
-            $ram = DB::table('components')
-                ->join('memory', 'memory.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 3)
-                ->whereRaw("{$ep} > 0")
-                ->when($ddrGen, function ($q) use ($ddrGen) {
-                    $q->where('memory.ddr_gen', $ddrGen);
-                })
-                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-
-        if ($ram) {
-            $price = (float)$ram->price;
-            $build['components']['ram'] = ['id' => $ram->id, 'name' => $ram->name, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-        }
-
-        // ── 4. VGA ────────────────────────────────────────────────────────────
-        if ($needsGpu && $remaining > 1000000) {
-            $reserve = $remainingFloors(['storage', 'psu', 'case']);
-            $vgaMax = min($alloc['vga'], $remaining - $reserve);
-            if ($vgaMax > 0) {
-                $vga = $this->pickByBudget(2, 'video_cards', $vgaMax);
-                if ($vga) {
-                    $price   = (float)$vga->price;
-                    $vgaName = $vga->name . (!empty($vga->chipset) ? ' (' . $vga->chipset . ')' : '');
-                    $build['components']['vga'] = ['id' => $vga->id, 'name' => $vgaName, 'price' => $price, 'image' => true];
-                    $build['total_price'] += $price;
-                    $remaining -= $price;
-                    $vgaSpec = DB::table('video_cards')->where('component_id', $vga->id)->first();
-                    $vgaTdp  = $vgaSpec->tdp ?? 0;
-                }
-            }
-        }
-        
-        // Fallback: If GPU is required but still missing, force pick cheapest VGA up to remaining (reserving storage/psu/case)
-        if ($needsGpu && !isset($build['components']['vga']) && $remaining > 1950000) {
-            $reserve = $remainingFloors(['storage', 'psu', 'case']);
-            $vgaLimit = max(0.0, $remaining - $reserve);
-            $vga = $this->pickByBudget(2, 'video_cards', $vgaLimit, null, true);
-            if ($vga) {
-                $price   = (float)$vga->price;
-                $vgaName = $vga->name . (!empty($vga->chipset) ? ' (' . $vga->chipset . ')' : '');
-                $build['components']['vga'] = ['id' => $vga->id, 'name' => $vgaName, 'price' => $price, 'image' => true];
-                $build['total_price'] += $price;
-                $remaining -= $price;
-                $vgaSpec = DB::table('video_cards')->where('component_id', $vga->id)->first();
-                $vgaTdp  = $vgaSpec->tdp ?? 0;
-            }
-        }
-
-        // ── 5. STORAGE ────────────────────────────────────────────────────────
-        $storageMin = $needsGpu ? 256 : 120;
-        $reserve = $remainingFloors(['psu', 'case']);
-        $storageMax = min($alloc['storage'], $remaining - $reserve);
-        
-        // 1. Try SSD with standard capacity within storageMax
-        $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageMax, function ($q) use ($storageMin) {
-            $q->where('internal_hard_drives.capacity', '>=', $storageMin)
-              ->where('internal_hard_drives.type', 'SSD');
-        });
-        
-        // 2. Fallback: SSD lower capacity within storageMax
-        if (!$storage && $storageMin > 120) {
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageMax, function ($q) {
-                $q->where('internal_hard_drives.capacity', '>=', 120)
-                  ->where('internal_hard_drives.type', 'SSD');
-            });
-        }
-        
-        // 3. Fallback: SSD even lower capacity (60GB) within storageMax
-        if (!$storage) {
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageMax, function ($q) {
-                $q->where('internal_hard_drives.capacity', '>=', 60)
-                  ->where('internal_hard_drives.type', 'SSD');
-            });
-        }
-        
-        // 4. Fallback: SSD standard capacity up to remaining budget (reserving other slots)
-        if (!$storage) {
-            $reserve = $remainingFloors(['psu', 'case']);
-            $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) use ($storageMin) {
-                $q->where('internal_hard_drives.capacity', '>=', $storageMin)
-                  ->where('internal_hard_drives.type', 'SSD');
-            }, true);
-        }
-        
-        // 5. Fallback: SSD lower capacity up to remaining budget (reserving other slots)
-        if (!$storage && $storageMin > 120) {
-            $reserve = $remainingFloors(['psu', 'case']);
-            $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) {
-                $q->where('internal_hard_drives.capacity', '>=', 120)
-                  ->where('internal_hard_drives.type', 'SSD');
-            }, true);
-        }
-
-        // 5.1. Fallback: SSD even lower capacity (60GB) up to remaining budget
-        if (!$storage) {
-            $reserve = $remainingFloors(['psu', 'case']);
-            $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) {
-                $q->where('internal_hard_drives.capacity', '>=', 60)
-                  ->where('internal_hard_drives.type', 'SSD');
-            }, true);
-        }
-        
-        // 6. Fallback: HDD standard capacity within storageMax
-        if (!$storage) {
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageMax, function ($q) use ($storageMin) {
-                $q->where('internal_hard_drives.capacity', '>=', $storageMin);
-            });
-        }
-        
-        // 7. Fallback: HDD standard capacity up to remaining budget (reserving other slots)
-        if (!$storage) {
-            $reserve = $remainingFloors(['psu', 'case']);
-            $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, function ($q) use ($storageMin) {
-                $q->where('internal_hard_drives.capacity', '>=', $storageMin);
-            }, true);
-        }
-        
-        // 8. Fallback: Any storage up to remaining budget (reserving other slots)
-        if (!$storage) {
-            $reserve = $remainingFloors(['psu', 'case']);
-            $storageLimit = max($storageMax, $remaining - $reserve);
-            $storage = $this->pickByBudget(4, 'internal_hard_drives', $storageLimit, null, true);
-        }
-        
-        // 9. Ultimate Fallback: Try cheapest SSD first, then any cheapest storage
-        if (!$storage) {
-            $storage = DB::table('components')
-                ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 4)
-                ->whereRaw("{$ep} > 0")
-                ->where('internal_hard_drives.type', 'SSD')
-                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-        if (!$storage) {
-            $storage = DB::table('components')
-                ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 4)
-                ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', 'internal_hard_drives.capacity', 'internal_hard_drives.type', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-        
-        if ($storage) {
-            $price = (float)$storage->price;
-            $capStr = ($storage->capacity >= 1000) ? (($storage->capacity / 1000) . 'TB') : ($storage->capacity . 'GB');
-            $storageName = $storage->name;
-            if (!empty($storage->capacity) && !empty($storage->type)) {
-                $storageName .= ' (' . $capStr . ' ' . $storage->type . ')';
-            }
-            $build['components']['storage'] = ['id' => $storage->id, 'name' => $storageName, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-        }
-
-        // ── 6. PSU ────────────────────────────────────────────────────────────
-        $requiredWatt = $cpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
-        $reserve = $remainingFloors(['case']);
-        $psuMax       = min($alloc['psu'], $remaining - $reserve);
-        $psu = $this->pickByBudget(6, 'power_supplies', $psuMax, function ($q) use ($requiredWatt) {
-            $q->where('power_supplies.wattage', '>=', $requiredWatt);
-        });
-        if (!$psu) {
-            $reserve = $remainingFloors(['case']);
-            $psuLimit = max($psuMax, $remaining - $reserve);
-            $psu = $this->pickByBudget(6, 'power_supplies', $psuLimit, function ($q) use ($requiredWatt) {
-                $q->where('power_supplies.wattage', '>=', $requiredWatt);
-            }, true);
-        }
-        
-        // 3. Ultimate Fallback: Select the absolute cheapest PSU in the database
-        if (!$psu) {
-            $psu = DB::table('components')
-                ->join('power_supplies', 'power_supplies.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 6)
-                ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-        
-        if ($psu) {
-            $price = (float)$psu->price;
-            $build['components']['psu'] = ['id' => $psu->id, 'name' => $psu->name, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-        }
-
-        // ── 7. CASE ───────────────────────────────────────────────────────────
-        $caseMax = min($alloc['case'], $remaining);
-        $case    = $this->pickByBudget(8, 'cases', $caseMax);
-        if (!$case) $case = $this->pickByBudget(8, 'cases', $remaining, null, true);
-        
-        // Ultimate Fallback: Select the absolute cheapest case in the database
-        if (!$case) {
-            $case = DB::table('components')
-                ->join('cases', 'cases.component_id', '=', 'components.id')
-                ->leftJoin(
-                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                    'cp.component_id', '=', 'components.id'
-                )
-                ->where('components.type_id', 8)
-                ->whereRaw("{$ep} > 0")
-                ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
-                ->orderBy('price')
-                ->first();
-        }
-        
-        if ($case) {
-            $price = (float)$case->price;
-            $build['components']['case'] = ['id' => $case->id, 'name' => $case->name, 'price' => $price, 'image' => true];
-            $build['total_price'] += $price;
-            $remaining -= $price;
-        }
-
-        $build = $this->upgradeBuild($build, $budget, $buildType, $cpuBrand, $needsGpu);
-
-        // Sắp xếp các linh kiện theo thứ tự tiêu chuẩn
-        $orderedKeys = ['cpu', 'mainboard', 'ram', 'vga', 'storage', 'psu', 'case'];
-        $orderedComponents = [];
-        foreach ($orderedKeys as $key) {
-            if (isset($build['components'][$key])) {
-                $orderedComponents[$key] = $build['components'][$key];
-            }
-        }
-        $build['components'] = $orderedComponents;
-
-        return $build;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     // HELPER: Chọn linh kiện tốt nhất trong budget
     // ─────────────────────────────────────────────────────────────────────────
-    private function pickByBudget(int $typeId, string $specTable, float $maxBudget, ?\Closure $filter = null, bool $asc = false): ?object
+    public function pickByBudget(int $typeId, string $specTable, float $maxBudget, ?\Closure $filter = null, bool $asc = false): ?object
     {
         $ep          = 'COALESCE(components.base_price, cp.price)';
         $selectExtra = [];
@@ -968,6 +438,8 @@ class AiBuildController extends Controller
             $selectExtra = ['video_cards.chipset'];
         } elseif ($specTable === 'internal_hard_drives') {
             $selectExtra = ['internal_hard_drives.capacity', 'internal_hard_drives.type'];
+        } elseif ($specTable === 'power_supplies') {
+            $selectExtra = ['power_supplies.wattage'];
         }
 
         $q = DB::table('components')
@@ -998,183 +470,322 @@ class AiBuildController extends Controller
     private function searchCpus(float $maxPrice, ?string $socket = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('cpus', 'cpus.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 1)
-            ->whereRaw("{$ep} > 0")
-            ->whereRaw("{$ep} <= ?", [$maxPrice])
-            ->when($socket, function($q) use ($socket) {
-                $q->where('cpus.socket', $socket);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'cpus.socket', 'cpus.tdp')
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        $mainQuery->whereRaw("{$ep} <= ?", [$maxPrice]);
+        if ($socket) {
+            $mainQuery->where('cpus.socket', $socket);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'cpus.socket', 'cpus.tdp')
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $fallbackQuery = clone $query;
+            if ($socket) {
+                $fallbackQuery->where('cpus.socket', $socket);
+            }
+            $results = $fallbackQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'cpus.socket', 'cpus.tdp')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     private function searchMotherboards(?string $socket = null, ?int $ddrGen = null, ?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('motherboards', 'motherboards.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 5)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->when($socket, function($q) use ($socket) {
-                $q->where('motherboards.socket', $socket);
-            })
-            ->when($ddrGen, function($q) use ($ddrGen) {
-                $q->where('motherboards.ddr_gen', $ddrGen);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'motherboards.socket', 'motherboards.ddr_gen')
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        if ($socket) {
+            $mainQuery->where('motherboards.socket', $socket);
+        }
+        if ($ddrGen) {
+            $mainQuery->where('motherboards.ddr_gen', $ddrGen);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'motherboards.socket', 'motherboards.ddr_gen')
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $fallbackQuery = clone $query;
+            if ($socket) {
+                $fallbackQuery->where('motherboards.socket', $socket);
+            }
+            if ($ddrGen) {
+                $fallbackQuery->where('motherboards.ddr_gen', $ddrGen);
+            }
+            $results = $fallbackQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'motherboards.socket', 'motherboards.ddr_gen')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     private function searchVideoCards(?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('video_cards', 'video_cards.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 2)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'video_cards.tdp', 'video_cards.chipset')
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'video_cards.tdp', 'video_cards.chipset')
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $results = $query->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'video_cards.tdp', 'video_cards.chipset')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     private function searchMemory(?int $ddrGen = null, ?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('memory', 'memory.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 3)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->when($ddrGen, function($q) use ($ddrGen) {
-                $q->where('memory.ddr_gen', $ddrGen);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'memory.capacity', 'memory.ddr_gen')
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        if ($ddrGen) {
+            $mainQuery->where('memory.ddr_gen', $ddrGen);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'memory.capacity', 'memory.ddr_gen')
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $fallbackQuery = clone $query;
+            if ($ddrGen) {
+                $fallbackQuery->where('memory.ddr_gen', $ddrGen);
+            }
+            $results = $fallbackQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'memory.capacity', 'memory.ddr_gen')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     private function searchPowerSupplies(?float $wattage = null, ?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('power_supplies', 'power_supplies.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 6)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->when($wattage, function($q) use ($wattage) {
-                $q->where('power_supplies.wattage', '>=', $wattage);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'power_supplies.wattage')
-            ->orderBy('price')
-            ->limit(2)
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        if ($wattage) {
+            $mainQuery->where('power_supplies.wattage', '>=', $wattage);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'power_supplies.wattage')
+            ->orderByDesc('price')
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $fallbackQuery = clone $query;
+            if ($wattage) {
+                $fallbackQuery->where('power_supplies.wattage', '>=', $wattage);
+            }
+            $results = $fallbackQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'power_supplies.wattage')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
-    private function getStoreCatalog(float $budget): array
+    private function getStoreCatalog(float $budget, string $needs): array
     {
-        return [
-            'cpus'           => $this->searchCpus($budget * 0.4),
-            'motherboards'   => $this->searchMotherboards(null, null, $budget * 0.3),
-            'video_cards'    => $this->searchVideoCards($budget * 0.6),
-            'memory'         => $this->searchMemory(null, $budget * 0.15),
-            'power_supplies' => $this->searchPowerSupplies(null, $budget * 0.1),
-            'storage'        => $this->searchStorage(null, $budget * 0.15),
-            'cases'          => $this->searchCases($budget * 0.08)
-        ];
+        $needsLower = strtolower($needs);
+        $needsGpu = true;
+        
+        // Cấu hình văn phòng/học tập thông dụng thì không cần VGA rời
+        if (str_contains($needsLower, 'văn phòng') || str_contains($needsLower, 'office') || str_contains($needsLower, 'học tập') || str_contains($needsLower, 'gia đình')) {
+            $needsGpu = false;
+        }
+
+        if ($needsGpu) {
+            // Cân đối ngân sách tối ưu cho Gaming/Workstation (ưu tiên VGA)
+            // Tổng hệ số = 0.20 + 0.15 + 0.38 + 0.10 + 0.07 + 0.07 + 0.05 = 1.02 (Bảo đảm AI không thể chọn vượt ngân sách quá 2%)
+            $cpuLimit = max($budget * 0.23, 1500000);
+            $mbLimit = max($budget * 0.12, 1350000);
+            $vgaLimit = max($budget * 0.38, 1500000);
+            $ramLimit = max($budget * 0.14, 800000);
+            $psuLimit = max($budget * 0.07, 650000);
+            $storageLimit = max($budget * 0.05, 800000);
+            $caseLimit = max($budget * 0.05, 500000);
+
+            return [
+                'cpus'           => $this->searchCpus($cpuLimit),
+                'motherboards'   => $this->searchMotherboards(null, null, $mbLimit),
+                'video_cards'    => $this->searchVideoCards($vgaLimit),
+                'memory'         => $this->searchMemory(null, $ramLimit),
+                'power_supplies' => $this->searchPowerSupplies(550, $psuLimit),
+                'storage'        => $this->searchStorage('SSD', $storageLimit),
+                'cases'          => $this->searchCases($caseLimit)
+            ];
+        } else {
+            // Tối ưu ngân sách cho Office (không dùng VGA, dồn tiền cho CPU/RAM/SSD)
+            // Tổng hệ số = 0.32 + 0.22 + 0.15 + 0.10 + 0.15 + 0.06 = 1.00
+            $cpuLimit = max($budget * 0.32, 1500000);
+            $mbLimit = max($budget * 0.22, 1150000);
+            $ramLimit = max($budget * 0.15, 700000);
+            $psuLimit = max($budget * 0.10, 550000);
+            $storageLimit = max($budget * 0.15, 700000);
+            $caseLimit = max($budget * 0.06, 400000);
+
+            return [
+                'cpus'           => $this->searchCpus($cpuLimit),
+                'motherboards'   => $this->searchMotherboards(null, null, $mbLimit),
+                'video_cards'    => [], // Không cần VGA
+                'memory'         => $this->searchMemory(null, $ramLimit),
+                'power_supplies' => $this->searchPowerSupplies(null, $psuLimit),
+                'storage'        => $this->searchStorage('SSD', $storageLimit),
+                'cases'          => $this->searchCases($caseLimit)
+            ];
+        }
     }
 
     private function searchStorage(?string $type = 'SSD', ?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('internal_hard_drives', 'internal_hard_drives.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 4)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->when($type, function($q) use ($type) {
-                $q->where('internal_hard_drives.type', $type);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'internal_hard_drives.capacity', 'internal_hard_drives.type')
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        if ($type) {
+            $mainQuery->where('internal_hard_drives.type', $type);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'internal_hard_drives.capacity', 'internal_hard_drives.type')
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $fallbackQuery = clone $query;
+            if ($type) {
+                $fallbackQuery->where('internal_hard_drives.type', $type);
+            }
+            $results = $fallbackQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"), 'internal_hard_drives.capacity', 'internal_hard_drives.type')
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     private function searchCases(?float $maxPrice = null): array
     {
         $ep = 'COALESCE(components.base_price, cp.price)';
-        return DB::table('components')
+        $query = DB::table('components')
             ->join('cases', 'cases.component_id', '=', 'components.id')
             ->leftJoin(
                 DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
                 'cp.component_id', '=', 'components.id'
             )
             ->where('components.type_id', 8)
-            ->whereRaw("{$ep} > 0")
-            ->when($maxPrice, function($q) use ($maxPrice) {
-                $q->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
-            })
-            ->select('components.id', 'components.name', DB::raw("{$ep} as price"))
+            ->whereRaw("{$ep} > 0");
+
+        $mainQuery = clone $query;
+        if ($maxPrice) {
+            $mainQuery->whereRaw("COALESCE(components.base_price, cp.price) <= ?", [$maxPrice]);
+        }
+        $results = $mainQuery->select('components.id', 'components.name', DB::raw("{$ep} as price"))
             ->orderByDesc('price')
-            ->limit(2)
+            ->limit($this->searchLimit)
             ->get()
             ->toArray();
+
+        if (count($results) < 5) {
+            $results = $query->select('components.id', 'components.name', DB::raw("{$ep} as price"))
+                ->orderBy('price')
+                ->limit(5)
+                ->get()
+                ->toArray();
+        }
+        return $results;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Helper: Nâng cấp tuần hoàn các linh kiện để tối ưu hóa ngân sách thừa
     // ─────────────────────────────────────────────────────────────────────────
-    private function upgradeBuild(array $build, float $budget, string $buildType, string $cpuBrand, bool $needsGpu): array
+    public function upgradeBuild(array $build, float $budget, string $buildType, string $cpuBrand, bool $needsGpu): array
     {
         $remaining = $budget - $build['total_price'];
         if ($remaining < 200000) {
@@ -1208,7 +819,106 @@ class AiBuildController extends Controller
         while ($remaining >= 200000 && $upgradedAny) {
             $upgradedAny = false;
 
-            // 1. Nâng cấp hoặc Thêm VGA (nếu needsGpu và còn thừa tiền)
+            // 1. Nâng cấp RAM (đảm bảo tương thích DDR Gen với mainboard đã chọn)
+            if ($remaining >= 200000 && isset($build['components']['ram'])) {
+                $currentRamPrice = $build['components']['ram']['price'];
+                $betterRam = $this->pickByBudget(3, 'memory', $currentRamPrice + $remaining, function ($q) use ($ddrGen) {
+                    if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
+                });
+                if ($betterRam && (float)$betterRam->price > $currentRamPrice) {
+                    $diff = (float)$betterRam->price - $currentRamPrice;
+                    $build['components']['ram'] = ['id' => $betterRam->id, 'name' => $betterRam->name, 'price' => (float)$betterRam->price, 'image' => true];
+                    $build['total_price'] += $diff;
+                    $remaining -= $diff;
+                    $upgradedAny = true;
+                }
+            }
+
+            // 2. Nâng cấp CPU (đảm bảo cùng socket với mainboard đã chọn)
+            if ($remaining >= 200000 && isset($build['components']['cpu'])) {
+                $currentCpuPrice = $build['components']['cpu']['price'];
+                
+                $mbObj = isset($build['components']['mainboard']) ? DB::table('components')->where('id', $build['components']['mainboard']['id'])->first() : null;
+                $isCheapMb = false;
+                if ($mbObj) {
+                    $mbNameVal = strtolower($mbObj->name);
+                    $badChipsets = ['h610', 'h510', 'h410', 'a320', 'a620', 'h710', 'b450', 'b460', 'b560'];
+                    foreach ($badChipsets as $chip) {
+                        if (str_contains($mbNameVal, $chip)) {
+                            $isCheapMb = true;
+                            break;
+                        }
+                    }
+                }
+
+                $betterCpu = null;
+                if ($buildType === 'gaming' && in_array($cpuBrand, ['amd', 'any']) && !$isCheapMb) {
+                    $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
+                        $q->whereRaw('LOWER(components.name) LIKE ?', ['%x3d%']);
+                        if ($socket)            $q->where('cpus.socket', $socket);
+                        $hasMb($q);
+                    });
+                }
+                if (!$betterCpu) {
+                    $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket, $isCheapMb) {
+                        if ($cpuBrand !== 'any') $q->whereRaw('LOWER(components.name) LIKE ?', ['%' . strtolower($cpuBrand) . '%']);
+                        if ($cpuMin > 0)        $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
+                        if ($socket)            $q->where('cpus.socket', $socket);
+                        $hasMb($q);
+                        if ($isCheapMb) {
+                            $q->whereRaw("COALESCE(components.base_price, cp.price) <= 4000000");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%k'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%kf'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%ks'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%x3d%'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%ryzen 7%'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%ryzen 9%'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%i7-%'");
+                            $q->whereRaw("LOWER(components.name) NOT LIKE '%i9-%'");
+                        }
+                    });
+                }
+                if ($betterCpu && (float)$betterCpu->price > $currentCpuPrice) {
+                    $diff = (float)$betterCpu->price - $currentCpuPrice;
+                    
+                    // Check PSU compatibility
+                    $betterCpuSpec = DB::table('cpus')->where('component_id', $betterCpu->id)->first();
+                    $betterCpuTdp = $betterCpuSpec->tdp ?? 65;
+                    $requiredWatt = $betterCpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
+                    
+                    $currentPsuPrice = $build['components']['psu']['price'] ?? 0;
+                    $psuSpec = isset($build['components']['psu']) ? DB::table('power_supplies')->where('component_id', $build['components']['psu']['id'])->first() : null;
+                    $psuWatt = $psuSpec->wattage ?? 0;
+                    
+                    if ($psuWatt < $requiredWatt) {
+                        $betterPsu = $this->pickByBudget(6, 'power_supplies', $currentPsuPrice + ($remaining - $diff), function ($q) use ($requiredWatt) {
+                            $q->where('power_supplies.wattage', '>=', $requiredWatt);
+                        }, true);
+                        if ($betterPsu) {
+                            $psuDiff = (float)$betterPsu->price - $currentPsuPrice;
+                            $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => true];
+                            $psuName = $betterPsu->name . (!empty($betterPsu->wattage) ? ' (' . $betterPsu->wattage . 'W)' : '');
+                            $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $psuName, 'price' => (float)$betterPsu->price, 'image' => true];
+                            $build['total_price'] += ($diff + $psuDiff);
+                            $remaining -= ($diff + $psuDiff);
+                            $cpuTdp = $betterCpuTdp;
+                            $upgradedAny = true;
+                            // Cập nhật lại socket của CPU mới
+                            $socket = $betterCpuSpec->socket ?? $socket;
+                        }
+                    } else {
+                        $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => true];
+                        $build['total_price'] += $diff;
+                        $remaining -= $diff;
+                        $cpuTdp = $betterCpuTdp;
+                        $upgradedAny = true;
+                        // Cập nhật lại socket của CPU mới
+                        $socket = $betterCpuSpec->socket ?? $socket;
+                    }
+                }
+            }
+
+            // 2. Nâng cấp hoặc Thêm VGA (nếu needsGpu và còn thừa tiền)
             if ($needsGpu && $remaining >= 200000) {
                 if (isset($build['components']['vga'])) {
                     $currentVgaPrice = $build['components']['vga']['price'];
@@ -1233,7 +943,8 @@ class AiBuildController extends Controller
                                 $psuDiff = (float)$betterPsu->price - $currentPsuPrice;
                                 $vgaName = $betterVga->name . (!empty($betterVga->chipset) ? ' (' . $betterVga->chipset . ')' : '');
                                 $build['components']['vga'] = ['id' => $betterVga->id, 'name' => $vgaName, 'price' => (float)$betterVga->price, 'image' => true];
-                                $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $betterPsu->name, 'price' => (float)$betterPsu->price, 'image' => true];
+                                $psuName = $betterPsu->name . (!empty($betterPsu->wattage) ? ' (' . $betterPsu->wattage . 'W)' : '');
+                                $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $psuName, 'price' => (float)$betterPsu->price, 'image' => true];
                                 $build['total_price'] += ($diff + $psuDiff);
                                 $remaining -= ($diff + $psuDiff);
                                 $vgaTdp = $betterVgaTdp;
@@ -1271,7 +982,8 @@ class AiBuildController extends Controller
                                 $psuDiff = (float)$betterPsu->price - $currentPsuPrice;
                                 $vgaName = $betterVga->name . (!empty($betterVga->chipset) ? ' (' . $betterVga->chipset . ')' : '');
                                 $build['components']['vga'] = ['id' => $betterVga->id, 'name' => $vgaName, 'price' => $diff, 'image' => true];
-                                $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $betterPsu->name, 'price' => (float)$betterPsu->price, 'image' => true];
+                                $psuName = $betterPsu->name . (!empty($betterPsu->wattage) ? ' (' . $betterPsu->wattage . 'W)' : '');
+                                $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $psuName, 'price' => (float)$betterPsu->price, 'image' => true];
                                 $build['total_price'] += ($diff + $psuDiff);
                                 $remaining -= ($diff + $psuDiff);
                                 $vgaTdp = $betterVgaTdp;
@@ -1285,64 +997,6 @@ class AiBuildController extends Controller
                             $vgaTdp = $betterVgaTdp;
                             $upgradedAny = true;
                         }
-                    }
-                }
-            }
-
-            // 2. Nâng cấp CPU (đảm bảo cùng socket với mainboard đã chọn)
-            if ($remaining >= 200000 && isset($build['components']['cpu'])) {
-                $currentCpuPrice = $build['components']['cpu']['price'];
-                $betterCpu = null;
-                if ($buildType === 'gaming' && in_array($cpuBrand, ['amd', 'any'])) {
-                    $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
-                        $q->whereRaw('LOWER(components.name) LIKE ?', ['%x3d%']);
-                        if ($socket)            $q->where('cpus.socket', $socket);
-                        $hasMb($q);
-                    });
-                }
-                if (!$betterCpu) {
-                    $betterCpu = $this->pickByBudget(1, 'cpus', $currentCpuPrice + $remaining, function ($q) use ($cpuBrand, $cpuMin, $ep, $hasMb, $socket) {
-                        if ($cpuBrand !== 'any') $q->whereRaw('LOWER(components.name) LIKE ?', ['%' . strtolower($cpuBrand) . '%']);
-                        if ($cpuMin > 0)        $q->whereRaw("{$ep} >= CAST(? AS NUMERIC)", [$cpuMin]);
-                        if ($socket)            $q->where('cpus.socket', $socket);
-                        $hasMb($q);
-                    });
-                }
-                if ($betterCpu && (float)$betterCpu->price > $currentCpuPrice) {
-                    $diff = (float)$betterCpu->price - $currentCpuPrice;
-                    
-                    // Check PSU compatibility
-                    $betterCpuSpec = DB::table('cpus')->where('component_id', $betterCpu->id)->first();
-                    $betterCpuTdp = $betterCpuSpec->tdp ?? 65;
-                    $requiredWatt = $betterCpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
-                    
-                    $currentPsuPrice = $build['components']['psu']['price'] ?? 0;
-                    $psuSpec = isset($build['components']['psu']) ? DB::table('power_supplies')->where('component_id', $build['components']['psu']['id'])->first() : null;
-                    $psuWatt = $psuSpec->wattage ?? 0;
-                    
-                    if ($psuWatt < $requiredWatt) {
-                        $betterPsu = $this->pickByBudget(6, 'power_supplies', $currentPsuPrice + ($remaining - $diff), function ($q) use ($requiredWatt) {
-                            $q->where('power_supplies.wattage', '>=', $requiredWatt);
-                        }, true);
-                        if ($betterPsu) {
-                            $psuDiff = (float)$betterPsu->price - $currentPsuPrice;
-                            $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => true];
-                            $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $betterPsu->name, 'price' => (float)$betterPsu->price, 'image' => true];
-                            $build['total_price'] += ($diff + $psuDiff);
-                            $remaining -= ($diff + $psuDiff);
-                            $cpuTdp = $betterCpuTdp;
-                            $upgradedAny = true;
-                            // Cập nhật lại socket của CPU mới
-                            $socket = $betterCpuSpec->socket ?? $socket;
-                        }
-                    } else {
-                        $build['components']['cpu'] = ['id' => $betterCpu->id, 'name' => $betterCpu->name, 'price' => (float)$betterCpu->price, 'image' => true];
-                        $build['total_price'] += $diff;
-                        $remaining -= $diff;
-                        $cpuTdp = $betterCpuTdp;
-                        $upgradedAny = true;
-                        // Cập nhật lại socket của CPU mới
-                        $socket = $betterCpuSpec->socket ?? $socket;
                     }
                 }
             }
@@ -1388,20 +1042,7 @@ class AiBuildController extends Controller
                 }
             }
 
-            // 4. Nâng cấp RAM (đảm bảo tương thích DDR Gen với mainboard đã chọn)
-            if ($remaining >= 200000 && isset($build['components']['ram'])) {
-                $currentRamPrice = $build['components']['ram']['price'];
-                $betterRam = $this->pickByBudget(3, 'memory', $currentRamPrice + $remaining, function ($q) use ($ddrGen) {
-                    if ($ddrGen) $q->where('memory.ddr_gen', $ddrGen);
-                });
-                if ($betterRam && (float)$betterRam->price > $currentRamPrice) {
-                    $diff = (float)$betterRam->price - $currentRamPrice;
-                    $build['components']['ram'] = ['id' => $betterRam->id, 'name' => $betterRam->name, 'price' => (float)$betterRam->price, 'image' => true];
-                    $build['total_price'] += $diff;
-                    $remaining -= $diff;
-                    $upgradedAny = true;
-                }
-            }
+            // 4. (Đã chuyển lên bước 1)
 
             // 5. Nâng cấp Storage (Ưu tiên SSD hơn HDD ngay cả khi dung lượng thấp hơn)
             if ($remaining >= 200000 && isset($build['components']['storage'])) {
@@ -1459,7 +1100,8 @@ class AiBuildController extends Controller
                 });
                 if ($betterPsu && (float)$betterPsu->price > $currentPsuPrice) {
                     $diff = (float)$betterPsu->price - $currentPsuPrice;
-                    $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $betterPsu->name, 'price' => (float)$betterPsu->price, 'image' => true];
+                    $psuName = $betterPsu->name . (!empty($betterPsu->wattage) ? ' (' . $betterPsu->wattage . 'W)' : '');
+                    $build['components']['psu'] = ['id' => $betterPsu->id, 'name' => $psuName, 'price' => (float)$betterPsu->price, 'image' => true];
                     $build['total_price'] += $diff;
                     $remaining -= $diff;
                     $upgradedAny = true;

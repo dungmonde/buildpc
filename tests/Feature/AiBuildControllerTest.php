@@ -15,7 +15,9 @@ class AiBuildControllerTest extends TestCase
     {
         parent::setUp();
         // Cấu hình API key cho môi trường test
-        putenv("GROQ_API_KEY=fake_groq_api_key");
+        $_ENV['GEMINI_API_KEY'] = 'fake_gemini_api_key';
+        $_SERVER['GEMINI_API_KEY'] = 'fake_gemini_api_key';
+        putenv("GEMINI_API_KEY=fake_gemini_api_key");
         $this->seedTestData();
     }
 
@@ -113,30 +115,30 @@ class AiBuildControllerTest extends TestCase
 
     public function test_suggest_redirects_back_with_error_when_api_key_is_missing(): void
     {
-        $oldEnv = $_ENV['GROQ_API_KEY'] ?? null;
-        $oldServer = $_SERVER['GROQ_API_KEY'] ?? null;
-        unset($_ENV['GROQ_API_KEY']);
-        unset($_SERVER['GROQ_API_KEY']);
-        putenv('GROQ_API_KEY');
+        $oldEnv = $_ENV['GEMINI_API_KEY'] ?? null;
+        $oldServer = $_SERVER['GEMINI_API_KEY'] ?? null;
+        unset($_ENV['GEMINI_API_KEY']);
+        unset($_SERVER['GEMINI_API_KEY']);
+        putenv('GEMINI_API_KEY');
 
         Http::fake([
-            'https://api.groq.com/*' => Http::response(['error' => 'Unauthorized'], 401)
+            'https://generativelanguage.googleapis.com/*' => Http::response(['error' => 'Unauthorized'], 401)
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 20000000, 'needs' => 'gaming']);
         
-        if ($oldEnv !== null) $_ENV['GROQ_API_KEY'] = $oldEnv;
-        if ($oldServer !== null) $_SERVER['GROQ_API_KEY'] = $oldServer;
-        putenv("GROQ_API_KEY=fake_groq_api_key");
+        if ($oldEnv !== null) $_ENV['GEMINI_API_KEY'] = $oldEnv;
+        if ($oldServer !== null) $_SERVER['GEMINI_API_KEY'] = $oldServer;
+        putenv("GEMINI_API_KEY=fake_gemini_api_key");
 
         $response->assertRedirect();
-        $response->assertSessionHas('error', 'Tính năng chưa được cấu hình (thiếu API Key trong file .env).');
+        $response->assertSessionHas('error', 'Tính năng chưa được cấu hình (thiếu GEMINI_API_KEY trong file .env).');
     }
 
     public function test_suggest_success_with_valid_ai_response(): void
     {
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -181,7 +183,7 @@ class AiBuildControllerTest extends TestCase
     {
         // CPU 11 (Ryzen - AM4) đi kèm MB 20 (Intel - LGA1700) -> Không tương thích socket
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -210,23 +212,16 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 25000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
-        
-        // Đảm bảo PHP đã tự lắp ráp cấu hình tương thích
-        $cpuSocket = DB::table('cpus')->where('component_id', $builds[0]['components']['cpu']['id'])->value('socket');
-        $mbSocket = DB::table('motherboards')->where('component_id', $builds[0]['components']['mainboard']['id'])->value('socket');
-        $this->assertEquals(strtolower($cpuSocket), strtolower($mbSocket));
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('không tương thích vật lý', session()->get('error'));
     }
 
     public function test_suggest_fallback_when_ram_ddr_gen_incompatible(): void
     {
         // RAM 31 (DDR5) đi kèm MB 20 (Hỗ trợ DDR4) -> Không tương thích RAM
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -255,22 +250,16 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 25000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
-
-        $mbDdr = DB::table('motherboards')->where('component_id', $builds[0]['components']['mainboard']['id'])->value('ddr_gen');
-        $ramDdr = DB::table('memory')->where('component_id', $builds[0]['components']['ram']['id'])->value('ddr_gen');
-        $this->assertEquals((int)$mbDdr, (int)$ramDdr);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('không tương thích vật lý', session()->get('error'));
     }
 
     public function test_suggest_fallback_when_psu_wattage_insufficient(): void
     {
         // CPU 10 (65W) + VGA 40 (170W) + 220W = 455W > PSU 61 (300W) -> Không đủ công suất nguồn
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -299,21 +288,16 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 25000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
-
-        $psuWatt = DB::table('power_supplies')->where('component_id', $builds[0]['components']['psu']['id'])->value('wattage');
-        $this->assertGreaterThanOrEqual(455, $psuWatt);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('không tương thích vật lý', session()->get('error'));
     }
 
     public function test_suggest_fallback_when_total_price_exceeds_budget(): void
     {
         // Tổng tiền vượt ngân sách 20 triệu rất nhiều
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -342,33 +326,29 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 5000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
-        $this->assertLessThanOrEqual(5000000 * 1.05, $builds[0]['total_price']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('vượt ngân sách', session()->get('error'));
     }
 
-    public function test_suggest_handles_rate_limit_error_from_groq(): void
+    public function test_suggest_handles_rate_limit_error_from_gemini(): void
     {
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'error' => 'Rate limit exceeded'
             ], 429)
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 20000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Lỗi phản hồi từ AI', session()->get('error'));
     }
 
-    public function test_suggest_handles_rate_limit_error_with_exact_wait_time_from_groq(): void
+    public function test_suggest_handles_rate_limit_error_with_exact_wait_time_from_gemini(): void
     {
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'error' => [
                     'message' => 'Rate limit reached on tokens per day (TPD: Limit 100000, Used 98911, Requested 1470. Please try again in 5m29.184s.'
                 ]
@@ -376,31 +356,29 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 20000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Lỗi phản hồi từ AI', session()->get('error'));
     }
 
-    public function test_suggest_handles_generic_error_from_groq(): void
+    public function test_suggest_handles_generic_error_from_gemini(): void
     {
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'error' => 'Internal Server Error'
             ], 500)
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 20000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Lỗi phản hồi từ AI', session()->get('error'));
     }
 
     public function test_suggest_uses_php_fallback_when_ai_response_is_invalid_json(): void
     {
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -412,17 +390,16 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 20000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('php_fallback', $builds[0]['source']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Lỗi phản hồi từ AI', session()->get('error'));
     }
 
     public function test_suggest_clean_cjk_characters(): void
     {
         // Gửi về tiêu đề có chữ Trung Quốc (游戏 / 运行) để test bộ làm sạch
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -485,59 +462,7 @@ class AiBuildControllerTest extends TestCase
         $this->assertEquals(30, $sessionBuild['ram']['id']);
     }
 
-    public function test_suggest_retries_with_fallback_model_on_429(): void
-    {
-        Http::fake([
-            'https://api.groq.com/*' => function ($request) {
-                $body = json_decode($request->body(), true);
-                $model = $body['model'] ?? '';
-                if ($model === 'llama-3.3-70b-versatile') {
-                    return Http::response([
-                        'error' => [
-                            'message' => 'Rate limit reached on tokens per day (TPD). Please try again in 5s.'
-                        ]
-                    ], 429);
-                }
-                if ($model === 'llama-3.1-8b-instant') {
-                    return Http::response([
-                        'choices' => [
-                            [
-                                'message' => [
-                                    'content' => json_encode([
-                                        'builds' => [
-                                            [
-                                                'title' => 'Cấu hình gaming tốt (Fallback Model)',
-                                                'build_type' => 'gaming',
-                                                'components' => [
-                                                    'cpu' => 10,
-                                                    'mainboard' => 20,
-                                                    'ram' => 30,
-                                                    'vga' => 40,
-                                                    'storage' => 50,
-                                                    'psu' => 60,
-                                                    'case' => 70
-                                                ],
-                                                'explanation' => 'Cấu hình này sử dụng bộ vi xử lý tầm trung mạnh mẽ kết hợp cùng card đồ họa rời.'
-                                            ]
-                                        ]
-                                    ])
-                                ]
-                            ]
-                        ]
-                    ], 200);
-                }
-                return Http::response(['error' => 'Not Found'], 404);
-            }
-        ]);
 
-        $response = $this->post('/builder/goi-y', ['budget' => 25000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('ai', $builds[0]['source']);
-        $this->assertEquals('Cấu hình gaming tốt (Fallback Model)', $builds[0]['title']);
-    }
 
     public function test_suggest_fallback_when_high_end_cpu_paired_with_low_end_mainboard(): void
     {
@@ -548,7 +473,7 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -577,70 +502,18 @@ class AiBuildControllerTest extends TestCase
         ]);
 
         $response = $this->post('/builder/goi-y', ['budget' => 25000000, 'needs' => 'gaming']);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        // Do CPU cao cấp ghép với H610, validator PHP phải đánh dấu không tương thích và kích hoạt fallback
-        $this->assertEquals('php_fallback', $builds[0]['source']);
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('không tương thích vật lý', session()->get('error'));
     }
 
-    public function test_suggest_overkill_office_upgrades_to_workstation_with_gpu(): void
-    {
-        // Mock an office build with no VGA and budget 70,000,000đ
-        Http::fake([
-            'https://api.groq.com/*' => Http::response([
-                'choices' => [
-                    [
-                        'message' => [
-                            'content' => json_encode([
-                                'builds' => [
-                                    [
-                                        'title' => 'Cấu hình văn phòng',
-                                        'build_type' => 'office',
-                                        'components' => [
-                                            'cpu' => 10,
-                                            'mainboard' => 20,
-                                            'ram' => 30,
-                                            'vga' => null,
-                                            'storage' => 50,
-                                            'psu' => 60,
-                                            'case' => 70
-                                        ],
-                                        'explanation' => 'Cấu hình văn phòng cơ bản.'
-                                    ]
-                                ]
-                            ])
-                        ]
-                    ]
-                ]
-            ], 200)
-        ]);
 
-        $response = $this->post('/builder/goi-y', [
-            'budget' => 70000000,
-            'needs' => 'văn phòng hiệu năng cao',
-            'confirm_overkill' => 1
-        ]);
-        $response->assertStatus(200);
-
-        $builds = $response->viewData('suggestedBuilds');
-        $this->assertCount(1, $builds);
-        $this->assertEquals('ai', $builds[0]['source']);
-        
-        // Cấu hình phải được nâng cấp và thêm VGA do needsGpu = true
-        $this->assertArrayHasKey('vga', $builds[0]['components']);
-        $this->assertNotNull($builds[0]['components']['vga']);
-        
-        // Tổng tiền được tối ưu hóa tăng lên nhiều
-        $this->assertGreaterThan(15000000, $builds[0]['total_price']);
-    }
 
     public function test_upgrade_build_adds_vga_and_upgrades_psu_wattage(): void
     {
         // Mock AI response without VGA, but PSU is initially PSU 61 (300W)
         Http::fake([
-            'https://api.groq.com/*' => Http::response([
+            'https://generativelanguage.googleapis.com/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
