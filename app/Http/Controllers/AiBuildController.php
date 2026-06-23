@@ -37,7 +37,7 @@ class AiBuildController extends Controller
         $messages = [
             [
                 'role' => 'system',
-                'content' => "Bạn là AI tư vấn cấu hình PC chuyên nghiệp. Dưới đây là danh sách linh kiện thực tế đang có sẵn tại cửa hàng (giá 'price', các thông số 'socket', 'ddr_gen', 'tdp', 'wattage'):\n" . json_encode($catalog, JSON_UNESCAPED_UNICODE) . "\n\nNhiệm vụ của bạn là chọn ra 1 bộ máy TỐT NHẤT trong tầm giá và trả về JSON. Các quy tắc BẮT BUỘC (vi phạm sẽ bị từ chối):\n1. NGÂN SÁCH: Tổng giá trị (sum of price) của tất cả 7 linh kiện được chọn TUYỆT ĐỐI KHÔNG ĐƯỢC VƯỢT QUÁ ngân sách người dùng. Hãy tính toán cộng dồn thật kỹ.\n2. TƯƠNG THÍCH VẬT LÝ: CPU 'socket' PHẢI giống hệt Mainboard 'socket'. RAM 'ddr_gen' PHẢI giống hệt Mainboard 'ddr_gen'.\n3. NGUỒN ĐIỆN (PSU): PSU 'wattage' phải >= (CPU 'tdp' + VGA 'tdp' + 220W).\n4. VGA: Nhu cầu 'gaming'/'workstation' (ngân sách >= 9tr) BẮT BUỘC phải có VGA rời (không null). Nhu cầu 'văn phòng' luôn set VGA là null.\n\nFormat JSON bắt buộc:\n{\"builds\":[{\"title\":\"Tên cấu hình\",\"build_type\":\"gaming|workstation|office\",\"components\":{\"cpu\":ID,\"mainboard\":ID,\"ram\":ID,\"vga\":ID_hoặc_null,\"storage\":ID,\"psu\":ID,\"case\":ID},\"explanation\":\"Mô tả lợi ích, KHÔNG nhắc tên hãng/model linh kiện cụ thể\"}]}"
+                'content' => "Bạn là AI tư vấn cấu hình PC chuyên nghiệp. Dưới đây là danh sách linh kiện thực tế đang có sẵn tại cửa hàng (giá 'price', các thông số 'socket', 'ddr_gen', 'tdp', 'wattage'):\n" . json_encode($catalog, JSON_UNESCAPED_UNICODE) . "\n\nNhiệm vụ của bạn là chọn ra 1 bộ máy TỐT NHẤT trong tầm giá và trả về JSON. Các quy tắc BẮT BUỘC (vi phạm sẽ bị từ chối):\n1. NGÂN SÁCH: Tổng giá trị (sum of price) của tất cả 7 linh kiện được chọn TUYỆT ĐỐI KHÔNG ĐƯỢC VƯỢT QUÁ ngân sách người dùng. Hãy tính toán cộng dồn thật kỹ.\n2. TƯƠNG THÍCH VẬT LÝ: CPU 'socket' PHẢI giống hệt Mainboard 'socket'. RAM 'ddr_gen' PHẢI giống hệt Mainboard 'ddr_gen'.\n3. NGUỒN ĐIỆN (PSU): PSU 'wattage' phải >= (CPU 'tdp' + VGA 'tdp' + 220W).\n4. VGA: Nhu cầu 'gaming'/'workstation' (ngân sách >= 9tr) BẮT BUỘC phải có VGA rời (không null). Nhu cầu 'văn phòng' luôn set VGA là null.\n\nBẮT BUỘC trả về đúng định dạng JSON chuẩn như sau (thay thế các số ID ví dụ bằng ID số nguyên thực tế từ danh sách linh kiện bên trên):\n{\n  \"builds\": [\n    {\n      \"title\": \"Cấu hình chơi game mạnh mẽ\",\n      \"build_type\": \"gaming\",\n      \"components\": {\n        \"cpu\": 123,\n        \"mainboard\": 456,\n        \"ram\": 789,\n        \"vga\": 101,\n        \"storage\": 202,\n        \"psu\": 303,\n        \"case\": 404\n      },\n      \"explanation\": \"Mô tả lợi ích cấu hình chung chung về hiệu năng và công dụng (Ví dụ: 'Cấu hình được thiết kế để đáp ứng tốt nhu cầu học tập, làm việc văn phòng và giải trí nhẹ nhàng. Hệ thống hoạt động mát mẻ, ổn định và tiết kiệm điện năng.'). TUYỆT ĐỐI KHÔNG nhắc đến tên hãng hoặc tên model linh kiện cụ thể nào (như AMD, Intel, NVIDIA, Gigabyte, Asus, MSI, Ryzen, Core, RTX, GTX, Radeon...) trong phần mô tả này.\"\n    }\n  ]\n}\n\nChú ý: Trường 'vga' nhận giá trị ID số nguyên hoặc null (nếu không có vga rời). KHÔNG được sử dụng cú pháp JavaScript (như thiếu dấu ngoặc kép ở key hoặc dùng dấu '=' thay cho ':'). Tất cả các key và value chuỗi phải nằm trong dấu ngoặc kép song song."
             ],
             [
                 'role' => 'user',
@@ -45,63 +45,75 @@ class AiBuildController extends Controller
             ]
         ];
 
-        $aiResult = null;
-        $fallbackReason = null;
-        $model = 'llama-3.3-70b-versatile';
+        $originalBudget = $budget;
+        $maxAttempts = 3;
+        $lastError = 'Không thể khởi tạo cấu hình.';
+        $model = 'llama-3.1-8b-instant';
 
-        try {
-            $maxRetries = 3;
-            $retryDelay = 2; // seconds
+        for ($attemptNo = 1; $attemptNo <= $maxAttempts; $attemptNo++) {
+            $aiResult = null;
+            $fallbackReason = null;
             $response = null;
 
-            for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
-                $response = Http::timeout(60)->withoutVerifying()->withHeaders([
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer ' . $apiKey,
-                ])->post('https://api.groq.com/openai/v1/chat/completions', [
-                    'model'           => $model,
-                    'messages'        => $messages,
-                    'response_format' => ['type' => 'json_object'],
-                    'max_tokens'      => 2048
-                ]);
+            try {
+                $maxRetries = 5;
+                $retryDelay = 4; // seconds
 
-                if ($response->status() === 429 && $attempt < $maxRetries) {
-                    Log::warning("Groq API returned 429. Retrying attempt {$attempt} after {$retryDelay}s...");
-                    sleep($retryDelay);
-                    $retryDelay *= 2; // exponential backoff
-                    continue;
+                for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+                    $response = Http::timeout(60)->withoutVerifying()->withHeaders([
+                        'Content-Type' => 'application/json',
+                        'Authorization' => 'Bearer ' . $apiKey,
+                    ])->post('https://api.groq.com/openai/v1/chat/completions', [
+                        'model'           => $model,
+                        'messages'        => $messages,
+                        'response_format' => ['type' => 'json_object'],
+                        'max_tokens'      => 2048
+                    ]);
+
+                    if (!$response->successful() && $attempt < $maxRetries) {
+                        $status = $response->status();
+                        $body = $response->body();
+                        if ($status === 429 && (str_contains($body, 'TPD') || str_contains($body, 'tokens per day') || str_contains($body, 'RPD') || str_contains($body, 'requests per day'))) {
+                            Log::warning("Groq API returned daily rate limit (TPD/RPD) for {$model}. Breaking retry loop.");
+                            break;
+                        }
+                        Log::warning("Groq API returned status {$status}. Retrying attempt {$attempt} after {$retryDelay}s...");
+                        sleep($retryDelay);
+                        $retryDelay *= 2; // exponential backoff
+                        continue;
+                    }
+                    break;
                 }
 
-                break;
-            }
-
-            if (!$response->successful()) {
-                $fallbackReason = 'Groq API error status ' . $response->status() . ': ' . $response->body();
-                Log::warning($fallbackReason);
-            } else {
-                $data = $response->json();
-                $content = $data['choices'][0]['message']['content'] ?? '';
-                $aiResult = json_decode(trim($content), true);
-                if (!$aiResult || !isset($aiResult['builds'])) {
-                    $fallbackReason = 'Invalid JSON output from AI: ' . $content;
+                if (!$response || !$response->successful()) {
+                    $fallbackReason = 'Groq API error status ' . ($response ? $response->status() : 'N/A') . ': ' . ($response ? $response->body() : 'No response');
+                    Log::warning($fallbackReason);
+                } else {
+                    $data = $response->json();
+                    $content = $data['choices'][0]['message']['content'] ?? '';
+                    $aiResult = json_decode(trim($content), true);
+                    if (!$aiResult || !isset($aiResult['builds'])) {
+                        $fallbackReason = 'Invalid JSON output from AI: ' . $content;
+                    }
                 }
+            } catch (\Exception $e) {
+                $fallbackReason = 'Exception in API call: ' . $e->getMessage();
+                Log::error($fallbackReason);
             }
-        } catch (\Exception $e) {
-            $fallbackReason = 'Exception in API call: ' . $e->getMessage();
-            Log::error($fallbackReason);
-        }
 
-        // Thử bỏ fallback PHP để kiểm tra xem AI tự làm có được không
-        if (!$aiResult || !isset($aiResult['builds']) || empty($aiResult['builds'])) {
-            return back()->with('error', 'Lỗi phản hồi từ AI: ' . ($fallbackReason ?? 'JSON không hợp lệ hoặc rỗng.'));
-        }
+            if (!$aiResult || !isset($aiResult['builds']) || empty($aiResult['builds'])) {
+                $lastError = 'Lỗi phản hồi từ AI: ' . ($fallbackReason ?? 'JSON không hợp lệ hoặc rỗng.');
+                Log::warning("Validation attempt {$attemptNo} failed on API call: {$lastError}");
+                continue;
+            }
 
-        $suggestedBuilds = [];
-        $originalBudget = $budget;
-        $aiSuccess = false;
+            $suggestedBuilds = [];
+            $build = $aiResult['builds'][0] ?? null;
+            if (!$build) {
+                $lastError = 'AI không trả về cấu hình nào.';
+                continue;
+            }
 
-        if ($aiResult && isset($aiResult['builds']) && !empty($aiResult['builds'])) {
-            foreach ($aiResult['builds'] as $build) {
             if (isset($build['explanation'])) {
                 $build['explanation'] = TextCleaner::cleanCjk($build['explanation']);
             }
@@ -112,123 +124,244 @@ class AiBuildController extends Controller
             $buildType = strtolower($build['build_type'] ?? 'gaming');
             
             // Thử lấy linh kiện thực tế theo lựa chọn của AI
-                    $selectedIds = $build['components'] ?? [];
-                    $components = [];
-                    $totalPrice = 0;
-                    $requiredTypes = ['cpu', 'mainboard', 'ram', 'storage', 'psu', 'case'];
-                    $hasAllRequired = true;
+            $selectedIds = $build['components'] ?? [];
+            $components = [];
+            $totalPrice = 0;
+            $requiredTypes = ['cpu', 'mainboard', 'ram', 'storage', 'psu', 'case'];
+            $hasAllRequired = true;
 
-                    foreach ($requiredTypes as $type) {
-                        $table = $type === 'ram' ? 'memory' : ($type === 'storage' ? 'internal_hard_drives' : ($type === 'psu' ? 'power_supplies' : ($type === 'case' ? 'cases' : ($type === 'mainboard' ? 'motherboards' : 'cpus'))));
-                        $typeId = $type === 'ram' ? 3 : ($type === 'storage' ? 4 : ($type === 'psu' ? 6 : ($type === 'case' ? 8 : ($type === 'mainboard' ? 5 : 1))));
-                        
-                        $selectCols = ['components.id', 'components.name', DB::raw('COALESCE(components.base_price, cp.price) as price')];
-                        if ($type === 'storage') {
-                            $selectCols[] = 'internal_hard_drives.capacity';
-                            $selectCols[] = 'internal_hard_drives.type';
-                        } elseif ($type === 'psu') {
-                            $selectCols[] = 'power_supplies.wattage';
-                        }
+            foreach ($requiredTypes as $type) {
+                $table = $type === 'ram' ? 'memory' : ($type === 'storage' ? 'internal_hard_drives' : ($type === 'psu' ? 'power_supplies' : ($type === 'case' ? 'cases' : ($type === 'mainboard' ? 'motherboards' : 'cpus'))));
+                $typeId = $type === 'ram' ? 3 : ($type === 'storage' ? 4 : ($type === 'psu' ? 6 : ($type === 'case' ? 8 : ($type === 'mainboard' ? 5 : 1))));
+                
+                $selectCols = ['components.id', 'components.name', DB::raw('COALESCE(components.base_price, cp.price) as price')];
+                if ($type === 'storage') {
+                    $selectCols[] = 'internal_hard_drives.capacity';
+                    $selectCols[] = 'internal_hard_drives.type';
+                } elseif ($type === 'psu') {
+                    $selectCols[] = 'power_supplies.wattage';
+                }
 
-                        $id = $selectedIds[$type] ?? null;
-                        $compObj = null;
-                        if ($id && is_numeric($id)) {
-                            $compObj = DB::table('components')
-                                ->join($table, "{$table}.component_id", '=', 'components.id')
-                                ->leftJoin(
-                                    DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                                    'cp.component_id', '=', 'components.id'
-                                )
-                                ->where('components.id', $id)
-                                ->select($selectCols)
-                                ->first();
-                        }
+                $id = $selectedIds[$type] ?? null;
+                $compObj = null;
+                if ($id && is_numeric($id)) {
+                    $compObj = DB::table('components')
+                        ->join($table, "{$table}.component_id", '=', 'components.id')
+                        ->leftJoin(
+                            DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                            'cp.component_id', '=', 'components.id'
+                        )
+                        ->where('components.id', $id)
+                        ->select($selectCols)
+                        ->first();
+                }
 
-                        // Auto-Correct if missing, invalid, or price is 0
-                        if (!$compObj || !(float)$compObj->price) {
-                            $compObj = $this->pickByBudget($typeId, $table, 5000000, null, true);
-                        }
+                // Auto-Correct if missing, invalid, or price is 0
+                if (!$compObj || !(float)$compObj->price) {
+                    $compObj = $this->pickByBudget($typeId, $table, 5000000, null, true);
+                }
 
-                        if (!$compObj || !(float)$compObj->price) {
-                            $hasAllRequired = false;
-                            break;
-                        }
+                if (!$compObj || !(float)$compObj->price) {
+                    $hasAllRequired = false;
+                    break;
+                }
 
-                        // Ensure selectedIds is updated with the corrected ID
-                        $selectedIds[$type] = $compObj->id;
+                $selectedIds[$type] = $compObj->id;
 
-                        $compName = $compObj->name;
-                        if ($type === 'storage') {
-                            $capStr = ($compObj->capacity >= 1000) ? (($compObj->capacity / 1000) . 'TB') : ($compObj->capacity . 'GB');
-                            if (!empty($compObj->capacity) && !empty($compObj->type)) {
-                                $compName .= ' (' . $capStr . ' ' . $compObj->type . ')';
-                            }
-                        } elseif ($type === 'psu') {
-                            if (!empty($compObj->wattage)) {
-                                $compName .= ' (' . $compObj->wattage . 'W)';
-                            }
-                        }
+                $compName = $compObj->name;
+                if ($type === 'storage') {
+                    $capStr = ($compObj->capacity >= 1000) ? (($compObj->capacity / 1000) . 'TB') : ($compObj->capacity . 'GB');
+                    if (!empty($compObj->capacity) && !empty($compObj->type)) {
+                        $compName .= ' (' . $capStr . ' ' . $compObj->type . ')';
+                    }
+                } elseif ($type === 'psu') {
+                    if (!empty($compObj->wattage)) {
+                        $compName .= ' (' . $compObj->wattage . 'W)';
+                    }
+                }
 
-                        $components[$type] = [
-                            'id' => $compObj->id,
-                            'name' => $compName,
-                            'price' => (float)$compObj->price,
+                $components[$type] = [
+                    'id' => $compObj->id,
+                    'name' => $compName,
+                    'price' => (float)$compObj->price,
+                    'image' => true,
+                ];
+                $totalPrice += (float)$compObj->price;
+            }
+
+            // Linh kiện VGA tùy chọn
+            if ($hasAllRequired && !empty($selectedIds['vga']) && is_numeric($selectedIds['vga'])) {
+                $compObj = DB::table('components')
+                    ->join('video_cards', 'video_cards.component_id', '=', 'components.id')
+                    ->leftJoin(
+                        DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                        'cp.component_id', '=', 'components.id'
+                    )
+                    ->where('components.id', $selectedIds['vga'])
+                    ->select('components.id', 'components.name', 'video_cards.tdp', 'video_cards.chipset', DB::raw('COALESCE(components.base_price, cp.price) as price'))
+                    ->first();
+
+                if ($compObj && (float)$compObj->price) {
+                    $vgaName = $compObj->name . (!empty($compObj->chipset) ? ' (' . $compObj->chipset . ')' : '');
+                    $components['vga'] = [
+                        'id' => $compObj->id,
+                        'name' => $vgaName,
+                        'price' => (float)$compObj->price,
+                        'image' => true,
+                    ];
+                    $totalPrice += (float)$compObj->price;
+                }
+            }
+
+            // Xác thực tính tương thích vật lý bằng PHP
+            $isCompatible = true;
+            $incompatibilities = [];
+            if ($hasAllRequired) {
+                $cpuSpec = DB::table('cpus')->where('component_id', $selectedIds['cpu'])->first();
+                $mbSpec  = DB::table('motherboards')->where('component_id', $selectedIds['mainboard'])->first();
+                $ramSpec = DB::table('memory')->where('component_id', $selectedIds['ram'])->first();
+                $psuSpec = DB::table('power_supplies')->where('component_id', $selectedIds['psu'])->first();
+
+                $cpuSocket = $cpuSpec->socket ?? null;
+                $mbSocket  = $mbSpec->socket ?? null;
+                $mbDdr     = $mbSpec->ddr_gen ?? null;
+                $ramDdr    = $ramSpec->ddr_gen ?? null;
+                $cpuTdp    = $cpuSpec->tdp ?? 65;
+                $psuWatt   = $psuSpec->wattage ?? 0;
+
+                $vgaTdp = 0;
+                if (!empty($selectedIds['vga']) && is_numeric($selectedIds['vga'])) {
+                    $vgaSpec = DB::table('video_cards')->where('component_id', $selectedIds['vga'])->first();
+                    $vgaTdp  = $vgaSpec->tdp ?? 0;
+                }
+
+                // 1. Kiểm tra Socket CPU và Motherboard
+                if ($cpuSocket && $mbSocket && strtolower($cpuSocket) !== strtolower($mbSocket)) {
+                    // AUTO CORRECT: Đổi Mainboard để khớp Socket CPU
+                    $correctedMb = $this->pickByBudget(5, 'motherboards', 5000000, function ($q) use ($cpuSocket) {
+                        $q->where('motherboards.socket', $cpuSocket);
+                    }, true);
+
+                    if ($correctedMb) {
+                        $totalPrice -= $components['mainboard']['price'];
+                        $components['mainboard'] = [
+                            'id' => $correctedMb->id,
+                            'name' => $correctedMb->name,
+                            'price' => (float)$correctedMb->price,
                             'image' => true,
                         ];
-                        $totalPrice += (float)$compObj->price;
+                        $totalPrice += (float)$correctedMb->price;
+                        $selectedIds['mainboard'] = $correctedMb->id;
+                        $mbSpec = DB::table('motherboards')->where('component_id', $correctedMb->id)->first();
+                        $mbSocket = $mbSpec->socket ?? null;
+                        $mbDdr = $mbSpec->ddr_gen ?? null;
+                    } else {
+                        $isCompatible = false;
+                        $incompatibilities[] = "Socket lệch (CPU: $cpuSocket vs Main: $mbSocket)";
+                    }
+                }
+                
+                // 2. Kiểm tra thế hệ DDR của Motherboard và RAM
+                if ($mbDdr && $ramDdr && (int)$mbDdr !== (int)$ramDdr) {
+                    // AUTO CORRECT: Đổi RAM để khớp DDR Mainboard
+                    $ramCapacity = $ramSpec->capacity ?? 8;
+                    
+                    $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($ramCapacity, $mbDdr) {
+                        $q->where('memory.capacity', '>=', $ramCapacity);
+                        $q->where('memory.ddr_gen', $mbDdr);
+                    }, true);
+                    
+                    if (!$correctedRam) {
+                        $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($mbDdr) {
+                            $q->where('memory.ddr_gen', $mbDdr);
+                        }, true);
                     }
 
-                    // Linh kiện VGA tùy chọn
-                    if ($hasAllRequired && !empty($selectedIds['vga']) && is_numeric($selectedIds['vga'])) {
-                        $compObj = DB::table('components')
-                            ->join('video_cards', 'video_cards.component_id', '=', 'components.id')
-                            ->leftJoin(
-                                DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                                'cp.component_id', '=', 'components.id'
-                            )
-                            ->where('components.id', $selectedIds['vga'])
-                            ->select('components.id', 'components.name', 'video_cards.chipset', DB::raw('COALESCE(components.base_price, cp.price) as price'))
-                            ->first();
-
-                        if ($compObj && (float)$compObj->price) {
-                            $vgaName = $compObj->name . (!empty($compObj->chipset) ? ' (' . $compObj->chipset . ')' : '');
-                            $components['vga'] = [
-                                'id' => $compObj->id,
-                                'name' => $vgaName,
-                                'price' => (float)$compObj->price,
-                                'image' => true,
-                            ];
-                            $totalPrice += (float)$compObj->price;
-                        }
+                    if ($correctedRam) {
+                        $totalPrice -= $components['ram']['price'];
+                        $components['ram'] = [
+                            'id' => $correctedRam->id,
+                            'name' => $correctedRam->name,
+                            'price' => (float)$correctedRam->price,
+                            'image' => true,
+                        ];
+                        $totalPrice += (float)$correctedRam->price;
+                        $selectedIds['ram'] = $correctedRam->id;
+                        $ramDdr = $mbDdr;
+                    } else {
+                        $isCompatible = false;
+                        $incompatibilities[] = "DDR lệch (Main: DDR$mbDdr vs RAM: DDR$ramDdr)";
                     }
+                }
 
-                    // Xác thực tính tương thích vật lý bằng PHP
-                    $isCompatible = true;
-                    $incompatibilities = [];
-                    if ($hasAllRequired) {
-                        $cpuSpec = DB::table('cpus')->where('component_id', $selectedIds['cpu'])->first();
-                        $mbSpec  = DB::table('motherboards')->where('component_id', $selectedIds['mainboard'])->first();
-                        $ramSpec = DB::table('memory')->where('component_id', $selectedIds['ram'])->first();
-                        $psuSpec = DB::table('power_supplies')->where('component_id', $selectedIds['psu'])->first();
+                // 3. Kiểm tra công suất nguồn đủ tải (CPU + VGA + hao phí)
+                $requiredWatt = $cpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
+                if ($psuWatt && $psuWatt < $requiredWatt) {
+                    // AUTO CORRECT: Đổi PSU cho đủ công suất
+                    $correctedPsu = $this->pickByBudget(6, 'power_supplies', 5000000, function ($q) use ($requiredWatt) {
+                        $q->where('power_supplies.wattage', '>=', $requiredWatt);
+                    }, true);
 
-                        $cpuSocket = $cpuSpec->socket ?? null;
-                        $mbSocket  = $mbSpec->socket ?? null;
-                        $mbDdr     = $mbSpec->ddr_gen ?? null;
-                        $ramDdr    = $ramSpec->ddr_gen ?? null;
-                        $cpuTdp    = $cpuSpec->tdp ?? 65;
-                        $psuWatt   = $psuSpec->wattage ?? 0;
+                    if ($correctedPsu) {
+                        $totalPrice -= $components['psu']['price'];
+                        $psuSpecNew = DB::table('power_supplies')->where('component_id', $correctedPsu->id)->first();
+                        $psuWattNew = $psuSpecNew->wattage ?? 0;
+                        $psuName = $correctedPsu->name . ($psuWattNew ? " ({$psuWattNew}W)" : '');
+                        
+                        $components['psu'] = [
+                            'id' => $correctedPsu->id,
+                            'name' => $psuName,
+                            'price' => (float)$correctedPsu->price,
+                            'image' => true,
+                        ];
+                        $totalPrice += (float)$correctedPsu->price;
+                        $selectedIds['psu'] = $correctedPsu->id;
+                        $psuWatt = $psuWattNew;
+                    } else {
+                        $isCompatible = false;
+                        $incompatibilities[] = "Nguồn quá yếu (PSU: {$psuWatt}W < Yêu cầu: {$requiredWatt}W)";
+                    }
+                }
 
-                        $vgaTdp = 0;
-                        if (!empty($selectedIds['vga']) && is_numeric($selectedIds['vga'])) {
-                            $vgaSpec = DB::table('video_cards')->where('component_id', $selectedIds['vga'])->first();
-                            $vgaTdp  = $vgaSpec->tdp ?? 0;
+                // 4. Kiểm tra loại trừ chipset Mainboard giá rẻ với CPU dòng cao
+                $cpuObj = DB::table('components')
+                    ->leftJoin(
+                        DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
+                        'cp.component_id', '=', 'components.id'
+                    )
+                    ->where('components.id', $selectedIds['cpu'])
+                    ->select('components.name', DB::raw('COALESCE(components.base_price, cp.price) as price'))
+                    ->first();
+                
+                $mbObj = DB::table('components')->where('id', $selectedIds['mainboard'])->first();
+
+                if ($cpuObj && $mbObj) {
+                    $cpuPriceVal = (float)$cpuObj->price;
+                    $cpuNameVal = strtolower($cpuObj->name);
+                    $isHighEndCpuVal = ($cpuPriceVal > 4000000)
+                        || preg_match('/\b(k|kf|ks|x3d)\b/i', $cpuNameVal)
+                        || str_contains($cpuNameVal, 'ryzen 7')
+                        || str_contains($cpuNameVal, 'ryzen 9')
+                        || str_contains($cpuNameVal, 'i7-')
+                        || str_contains($cpuNameVal, 'i9-');
+                    
+                    if ($isHighEndCpuVal) {
+                        $mbNameVal = strtolower($mbObj->name);
+                        $badChipsets = ['h610', 'h510', 'h410', 'a320', 'a620', 'h710', 'b450', 'b460', 'b560'];
+                        $hasBadChip = false;
+                        foreach ($badChipsets as $chip) {
+                            if (str_contains($mbNameVal, $chip)) {
+                                $hasBadChip = true;
+                                break;
+                            }
                         }
-
-                        // 1. Kiểm tra Socket CPU và Motherboard
-                        if ($cpuSocket && $mbSocket && strtolower($cpuSocket) !== strtolower($mbSocket)) {
-                            // AUTO CORRECT: Đổi Mainboard để khớp Socket CPU
-                            $correctedMb = $this->pickByBudget(5, 'motherboards', 5000000, function ($q) use ($cpuSocket) {
+                        if ($hasBadChip) {
+                            // AUTO CORRECT: Đổi Mainboard lên dòng cao hơn cùng socket (không thuộc badChipsets)
+                            $correctedMb = $this->pickByBudget(5, 'motherboards', 5000000, function ($q) use ($cpuSocket, $badChipsets) {
                                 $q->where('motherboards.socket', $cpuSocket);
+                                foreach ($badChipsets as $chip) {
+                                    $q->whereRaw('LOWER(components.name) NOT LIKE ?', ['%' . strtolower($chip) . '%']);
+                                }
                             }, true);
 
                             if ($correctedMb) {
@@ -246,181 +379,57 @@ class AiBuildController extends Controller
                                 $mbDdr = $mbSpec->ddr_gen ?? null;
                             } else {
                                 $isCompatible = false;
-                                $incompatibilities[] = "Socket lệch (CPU: $cpuSocket vs Main: $mbSocket)";
-                            }
-                        }
-                        
-                        // 2. Kiểm tra thế hệ DDR của Motherboard và RAM
-                        if ($mbDdr && $ramDdr && (int)$mbDdr !== (int)$ramDdr) {
-                            // AUTO CORRECT: Đổi RAM để khớp DDR Mainboard
-                            $ramCapacity = $ramSpec->capacity ?? 8;
-                            
-                            $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($ramCapacity, $mbDdr) {
-                                $q->where('memory.capacity', '>=', $ramCapacity);
-                                $q->where('memory.ddr_gen', $mbDdr);
-                            }, true);
-                            
-                            if (!$correctedRam) {
-                                $correctedRam = $this->pickByBudget(3, 'memory', 5000000, function ($q) use ($mbDdr) {
-                                    $q->where('memory.ddr_gen', $mbDdr);
-                                }, true);
-                            }
-
-                            if ($correctedRam) {
-                                $totalPrice -= $components['ram']['price'];
-                                $components['ram'] = [
-                                    'id' => $correctedRam->id,
-                                    'name' => $correctedRam->name,
-                                    'price' => (float)$correctedRam->price,
-                                    'image' => true,
-                                ];
-                                $totalPrice += (float)$correctedRam->price;
-                                $selectedIds['ram'] = $correctedRam->id;
-                                $ramDdr = $mbDdr;
-                            } else {
-                                $isCompatible = false;
-                                $incompatibilities[] = "DDR lệch (Main: DDR$mbDdr vs RAM: DDR$ramDdr)";
-                            }
-                        }
-
-                        // 3. Kiểm tra công suất nguồn đủ tải (CPU + VGA + hao phí)
-                        $requiredWatt = $cpuTdp + $vgaTdp + ($vgaTdp > 0 ? 220 : 150);
-                        if ($psuWatt && $psuWatt < $requiredWatt) {
-                            // AUTO CORRECT: Đổi PSU cho đủ công suất
-                            $correctedPsu = $this->pickByBudget(6, 'power_supplies', 5000000, function ($q) use ($requiredWatt) {
-                                $q->where('power_supplies.wattage', '>=', $requiredWatt);
-                            }, true);
-
-                            if ($correctedPsu) {
-                                $totalPrice -= $components['psu']['price'];
-                                $psuSpecNew = DB::table('power_supplies')->where('component_id', $correctedPsu->id)->first();
-                                $psuWattNew = $psuSpecNew->wattage ?? 0;
-                                $psuName = $correctedPsu->name . ($psuWattNew ? " ({$psuWattNew}W)" : '');
-                                
-                                $components['psu'] = [
-                                    'id' => $correctedPsu->id,
-                                    'name' => $psuName,
-                                    'price' => (float)$correctedPsu->price,
-                                    'image' => true,
-                                ];
-                                $totalPrice += (float)$correctedPsu->price;
-                                $selectedIds['psu'] = $correctedPsu->id;
-                                $psuWatt = $psuWattNew;
-                            } else {
-                                $isCompatible = false;
-                                $incompatibilities[] = "Nguồn quá yếu (PSU: {$psuWatt}W < Yêu cầu: {$requiredWatt}W)";
-                            }
-                        }
-
-                        // 4. Kiểm tra loại trừ chipset Mainboard giá rẻ với CPU dòng cao
-                        $cpuObj = DB::table('components')
-                            ->leftJoin(
-                                DB::raw('(SELECT component_id, MIN(price) as price FROM component_prices GROUP BY component_id) cp'),
-                                'cp.component_id', '=', 'components.id'
-                            )
-                            ->where('components.id', $selectedIds['cpu'])
-                            ->select('components.name', DB::raw('COALESCE(components.base_price, cp.price) as price'))
-                            ->first();
-                        
-                        $mbObj = DB::table('components')->where('id', $selectedIds['mainboard'])->first();
-
-                        if ($cpuObj && $mbObj) {
-                            $cpuPriceVal = (float)$cpuObj->price;
-                            $cpuNameVal = strtolower($cpuObj->name);
-                            $isHighEndCpuVal = ($cpuPriceVal > 4000000)
-                                || preg_match('/\b(k|kf|ks|x3d)\b/i', $cpuNameVal)
-                                || str_contains($cpuNameVal, 'ryzen 7')
-                                || str_contains($cpuNameVal, 'ryzen 9')
-                                || str_contains($cpuNameVal, 'i7-')
-                                || str_contains($cpuNameVal, 'i9-');
-                            
-                            if ($isHighEndCpuVal) {
-                                $mbNameVal = strtolower($mbObj->name);
-                                $badChipsets = ['h610', 'h510', 'h410', 'a320', 'a620', 'h710', 'b450', 'b460', 'b560'];
-                                foreach ($badChipsets as $chip) {
-                                    if (str_contains($mbNameVal, $chip)) {
-                                        $isCompatible = false;
-                                        $incompatibilities[] = "Chipset rẻ tiền ($chip) nghẽn cổ chai CPU dòng cao cấp";
-                                        break;
-                                    }
-                                }
+                                $incompatibilities[] = "Chipset rẻ tiền ($mbNameVal) nghẽn cổ chai CPU dòng cao cấp và không tìm thấy bo mạch chủ thay thế tốt hơn";
                             }
                         }
                     }
+                }
+            }
 
-                    if ($hasAllRequired && $isCompatible && $totalPrice <= ($budget * 1.10)) {
-                        $aiBuild = [
-                            'title' => $build['title'] ?? 'Cấu hình Đề xuất',
-                            'explanation' => $build['explanation'] ?? '',
-                            'budget_allocated' => $budget,
-                            'components' => $components,
-                            'total_price' => $totalPrice,
-                        ];
+            if ($hasAllRequired && $isCompatible && $totalPrice <= ($budget * 1.15)) {
+                $aiBuild = [
+                    'title' => $build['title'] ?? 'Cấu hình Đề xuất',
+                    'explanation' => $build['explanation'] ?? '',
+                    'budget_allocated' => $budget,
+                    'components' => $components,
+                    'total_price' => $totalPrice,
+                ];
 
-                        // Nâng cấp cấu hình của AI nếu còn dư ngân sách
-                        $needsGpuVal = in_array($buildType, ['gaming', 'workstation']) && $budget >= 9000000;
-                        $aiBuild = $this->upgradeBuild($aiBuild, $budget, $buildType, 'any', $needsGpuVal);
-                        $aiBuild['source'] = 'ai';
+                // Nâng cấp cấu hình của AI nếu còn dư ngân sách
+                $needsGpuVal = in_array($buildType, ['gaming', 'workstation']) && $budget >= 9000000;
+                $aiBuild = $this->upgradeBuild($aiBuild, $budget, $buildType, 'any', $needsGpuVal);
+                $aiBuild['source'] = 'ai';
 
-                        // Sắp xếp các linh kiện theo thứ tự tiêu chuẩn
-                        $orderedKeys = ['cpu', 'mainboard', 'ram', 'vga', 'storage', 'psu', 'case'];
-                        $orderedComponents = [];
-                        foreach ($orderedKeys as $key) {
-                            if (isset($aiBuild['components'][$key])) {
-                                $orderedComponents[$key] = $aiBuild['components'][$key];
-                            }
-                        }
-                        $aiBuild['components'] = $orderedComponents;
-
-                        $suggestedBuilds[] = $aiBuild;
-                        $aiSuccess = true;
-                    } else {
-                        // AI build bị từ chối, ghi nhận lý do để fallback
-                        $reasons = [];
-                        if (!$hasAllRequired) $reasons[] = 'Thiếu linh kiện bắt buộc';
-                        if (isset($isCompatible) && !$isCompatible) {
-                            $reasons[] = 'Linh kiện không tương thích vật lý: [' . implode(' | ', $incompatibilities) . ']';
-                        }
-                        if ($totalPrice > ($budget * 1.10)) $reasons[] = 'Tổng giá vượt ngân sách sau khi Auto-Correct (' . number_format($totalPrice) . 'đ > ' . number_format($budget * 1.10) . 'đ)';
-                        
-                        // Disable fallback: return error directly
-                        return back()->with('error', 'Cấu hình AI chọn bị từ chối do: ' . implode(', ', $reasons));
+                // Sắp xếp các linh kiện theo thứ tự tiêu chuẩn
+                $orderedKeys = ['cpu', 'mainboard', 'ram', 'vga', 'storage', 'psu', 'case'];
+                $orderedComponents = [];
+                foreach ($orderedKeys as $key) {
+                    if (isset($aiBuild['components'][$key])) {
+                        $orderedComponents[$key] = $aiBuild['components'][$key];
                     }
+                }
+                $aiBuild['components'] = $orderedComponents;
+
+                $suggestedBuilds[] = $aiBuild;
+                return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs', 'originalBudget'));
+            } else {
+                // AI build bị từ chối, ghi nhận lý do và thử lại
+                $reasons = [];
+                if (!$hasAllRequired) $reasons[] = 'Thiếu linh kiện bắt buộc';
+                if (isset($isCompatible) && !$isCompatible) {
+                    $reasons[] = 'Linh kiện không tương thích vật lý: [' . implode(' | ', $incompatibilities) . ']';
+                }
+                if ($totalPrice > ($budget * 1.15)) {
+                    $reasons[] = 'Tổng giá vượt ngân sách sau khi Auto-Correct (' . number_format($totalPrice) . 'đ > ' . number_format($budget * 1.15) . 'đ)';
+                }
+                
+                $lastError = 'Cấu hình AI chọn bị từ chối do: ' . implode(', ', $reasons);
+                Log::warning("Validation attempt {$attemptNo} failed: {$lastError}. Retrying a new build from AI...");
             }
         }
 
-        /*
-        // Kích hoạt PHP Fallback nếu AI thất bại
-        if (!$aiSuccess) {
-            $needsLower = strtolower($needs);
-            $buildType = 'gaming';
-            if (str_contains($needsLower, 'văn phòng') || str_contains($needsLower, 'office') || str_contains($needsLower, 'học tập') || str_contains($needsLower, 'gia đình')) {
-                $buildType = 'office';
-            } elseif (str_contains($needsLower, 'workstation') || str_contains($needsLower, 'đồ họa') || str_contains($needsLower, 'render') || str_contains($needsLower, 'kiến trúc')) {
-                $buildType = 'workstation';
-            }
-
-            $cpuBrand = 'any';
-            if (str_contains($needsLower, 'intel') || str_contains($needsLower, 'core i') || str_contains($needsLower, 'pentium')) {
-                $cpuBrand = 'intel';
-            } elseif (str_contains($needsLower, 'amd') || str_contains($needsLower, 'ryzen')) {
-                $cpuBrand = 'amd';
-            }
-
-            $fallbackIntent = [
-                'build_type'  => $buildType,
-                'cpu_brand'   => $cpuBrand,
-                'title'       => 'Cấu hình Đề xuất (Hệ thống Phân tích)',
-                'explanation' => 'Đây là cấu hình tối ưu nhất được tính toán bởi thuật toán cục bộ của chúng tôi dựa trên mức giá hiện tại.',
-            ];
-
-            $fallbackBuild = \App\Http\Controllers\PHPBuildFallback::assembleBuild($this, $fallbackIntent, $budget);
-            $fallbackBuild['source'] = 'php_fallback';
-            $suggestedBuilds[] = $fallbackBuild;
-        }
-        */
-
-        return view('pages.build_pc.ai-result', compact('suggestedBuilds', 'budget', 'needs', 'originalBudget'));
+        // Nếu tất cả các lần thử lại đều bị từ chối
+        return back()->with('error', $lastError);
 
         } catch (\Exception $e) {
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
